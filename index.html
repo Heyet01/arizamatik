@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16324F">
+<title>Arızamatik</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
+<style>
+:root{--asphalt:#16324F;--amber:#F2A900;--paper:#F5F7F6;--card:#fff;--ink:#14202B;--steel:#5B6B7A;--line:#DCE2E6;--red:#D6362F;--green:#1E8A5A;--soft:#E9EEF1}
+@media (prefers-color-scheme:dark){:root{--paper:#0F1A24;--card:#172533;--ink:#E8EEF2;--steel:#98A8B6;--line:#2A3B4B;--soft:#1E2F3F;--asphalt:#0B2238}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:"Barlow",system-ui,-apple-system,Roboto,sans-serif;font-size:16px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{border:0;background:none;cursor:pointer}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.app{max-width:480px;margin:0 auto;min-height:100vh}
+.top{background:var(--asphalt);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px}
+.logo{display:flex;align-items:center;gap:8px;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:25px}
+.mark{width:28px;height:28px;background:var(--amber);color:#16324F;display:grid;place-items:center;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);font-size:14px}
+.back{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.12);font-size:22px;color:#fff}
+.ttl{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:22px}
+.loc{margin-left:auto;font-size:13px;opacity:.85}
+main{padding:16px 16px 96px}
+.hero{background:var(--asphalt);color:#fff;margin:-16px -16px 0;padding:8px 16px 22px}
+.hero h1{font-family:"Barlow Condensed",sans-serif;font-size:36px;line-height:1;margin-bottom:12px}
+.seg{display:flex;background:rgba(255,255,255,.1);border-radius:12px;padding:4px;margin-bottom:10px}
+.seg button{flex:1;padding:9px;border-radius:9px;font-weight:600;color:#cfdbe5}
+.seg button.on{background:var(--amber);color:#16324F}
+.ask{display:flex;background:#fff;border-radius:14px;padding:6px 6px 6px 14px;gap:8px}
+.ask input{flex:1;border:0;background:transparent;color:#14202B;min-width:0}
+.ask input:focus{outline:none}
+.ask button,.btn{background:var(--amber);color:#16324F;font-weight:700;padding:11px 14px;border-radius:10px}
+.stripe{height:8px;background:repeating-linear-gradient(-45deg,var(--amber) 0 14px,var(--asphalt) 14px 28px);margin:0 -16px 16px}
+.sos{width:100%;display:flex;gap:14px;align-items:center;background:var(--red);color:#fff;border-radius:16px;padding:15px;text-align:left;margin-bottom:20px}
+.sos b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:22px}
+h2{font-family:"Barlow Condensed",sans-serif;font-size:22px;margin:4px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.cat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 4px;font-size:13px;font-weight:600;text-align:center}
+.cat i{display:block;font-style:normal;font-size:26px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.pro{display:flex;gap:12px;width:100%;text-align:left}
+.av{width:48px;height:48px;border-radius:12px;background:var(--asphalt);color:var(--amber);display:grid;place-items:center;font-family:"Barlow Condensed",sans-serif;font-size:22px;font-weight:800;flex:none}
+.muted{color:var(--steel);font-size:14px}
+.star{color:#c98c00;font-weight:700}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.btn{display:block;width:100%;text-align:center;margin-top:10px}
+.btn.alt{background:var(--soft);color:var(--ink)}
+.btn.red{background:var(--red);color:#fff}
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.acts a,.acts button{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 4px;text-align:center;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none}
+.tr{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.tr:last-child{border:0}
+label{display:block;font-size:14px;font-weight:600;margin:12px 0 4px}
+.in{width:100%;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:11px 12px}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.chk{border:1px solid var(--line);background:var(--card);border-radius:20px;padding:6px 12px;font-size:14px}
+.chk.on{background:var(--asphalt);color:#fff;border-color:var(--asphalt)}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tabs button{flex:1;border:1px solid var(--line);background:var(--card);padding:9px;border-radius:10px;font-weight:600}
+.tabs button.on{background:var(--amber);color:#16324F;border-color:var(--amber)}
+.tip{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:8px}
+.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft)}
+.empty{text-align:center;padding:30px 10px;color:var(--steel)}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:6}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;font-size:11px;font-weight:600;color:var(--steel)}
+nav button i{font-style:normal;font-size:21px}
+nav button.on{color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;display:none;z-index:9;max-width:90%}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top" id="top"></header>
+  <main id="view"></main>
+  <nav id="nav">
+    <button data-n="home" class="on"><i>🏠</i>Ana sayfa</button>
+    <button data-n="stations"><i>📍</i>Yakınımda</button>
+    <button data-n="jobs"><i>🧾</i>Taleplerim</button>
+    <button data-n="account"><i>👤</i>Hesabım</button>
+  </nav>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ AYARLAR: Supabase bilgilerini buraya yapistir ============ */
+const SUPABASE_URL = 'https://gpgygbrhplsvgjxmunhw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_pfn9eXTbZ0WQKjQdv5Z_pg_lAwIu3uS';
+/* ======================================================================= */
+
+const S = { user:null, mode:'arac', cats:[], lat:41.0082, lng:28.9784, locOk:false, stack:[], cur:null };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tl = n => n == null ? '' : Number(n).toLocaleString('tr-TR') + ' ₺';
+const toast = m => { const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',3000); };
+const point = () => `SRID=4326;POINT(${S.lng} ${S.lat})`;
+const DAYS = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+
+const configured = !SUPABASE_URL.includes('BURAYA') && !SUPABASE_KEY.includes('BURAYA');
+const db = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+/* ---------- Hizli yonlendirme (yapay zeka asistani sonraki adimda) ---------- */
+const RULES = [
+  {k:['hararet','ısın','radyatör','su kaynat'],slug:'mekanik',t:'Motor aşırı ısınıyor olabilir',tip:'Aracı güvenli yerde durdur, motoru kapat. Motor sıcakken radyatör kapağını açma.'},
+  {k:['fren','balata'],slug:'mekanik',t:'Fren sistemi sorunu olabilir',tip:'Fren şüphesi varsa aracı kullanma, çekici çağır.'},
+  {k:['motor','yağ','duman','ses'],slug:'mekanik',t:'Mekanik bir arıza olabilir',tip:'Arıza lambası yanıyorsa uzun yol yapmadan ustaya göster.'},
+  {k:['lastik','patla','teker','inik'],slug:'lastik',t:'Lastik sorunu',tip:'Dörtlüleri yak, emniyet şeridine çek. Trafik akarken yol tarafında lastik değiştirme.'},
+  {k:['akü','marş','çalışmıyor','kontak'],slug:'oto-elektrik',t:'Akü veya marş sorunu olabilir',tip:'Takviye kablosunu yanlış bağlamak elektroniğe zarar verebilir.'},
+  {k:['kaza','göçük','çizik','boya'],slug:'kaporta',t:'Kaporta hasarı',tip:'Yaralanma varsa önce 112\'yi ara.'},
+  {k:['cam','kırıl'],slug:'oto-cam',t:'Cam hasarı',tip:'Çatlak büyümeden değiştirmek daha ucuza gelir.'},
+  {k:['su gelmiyor','musluk','sızıntı','kaçak','tıkan','gider','petek','boru'],slug:'su-tesisat',t:'Su tesisatı arızası',tip:'Kaçak varsa ana su vanasını kapat, suyun prizlere ulaşmasını engelle.'},
+  {k:['sigorta','elektrik','priz','kısa devre','ışık'],slug:'elektrik',t:'Elektrik arızası',tip:'Yanık kokusu veya kıvılcım varsa ana şalteri kapat. Panoyu kendin açma.'},
+  {k:['buzdolabı','çamaşır','bulaşık','fırın'],slug:'beyaz-esya',t:'Beyaz eşya arızası',tip:'Cihazın fişini çekmeden içine müdahale etme.'},
+  {k:['kombi','doğalgaz','gaz kokusu','sıcak su'],slug:'kombi',t:'Kombi / doğalgaz sorunu',tip:'Gaz kokusu varsa elektrik düğmelerine dokunma, vanayı kapat, havalandır ve 187\'yi ara.'},
+  {k:['klima'],slug:'klima',t:'Klima arızası',tip:'Filtreyi kontrol edebilirsin, iç aksama dokunma.'},
+  {k:['kapı','anahtar','kilit'],slug:'cilingir',t:'Kilit / kapı sorunu',tip:'Çilingir kimlik doğrulaması isteyebilir.'}
+];
+
+/* ---------- Navigasyon ---------- */
+function go(name, arg, push=true){
+  if (push && S.cur) S.stack.push([S.cur.name, S.cur.arg]);
+  S.cur = {name, arg};
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.n === name));
+  window.scrollTo(0,0);
+  SCREENS[name](arg);
+}
+function back(){ const p = S.stack.pop(); p ? go(p[0], p[1], false) : go('home', null, false); }
+function header(title){
+  $('top').innerHTML = title
+    ? `<button class="back" onclick="back()" aria-label="Geri">‹</button><span class="ttl">${esc(title)}</span>`
+    : `<div class="logo"><span class="mark">A</span>Arızamatik</div><span class="loc">${S.locOk?'📍 Konumun açık':'📍 Konum kapalı'}</span>`;
+}
+$('nav').onclick = e => { const b=e.target.closest('[data-n]'); if(!b) return; S.stack=[]; go(b.dataset.n, null, false); };
+function needLogin(){ if (S.user) return false; toast('Bu işlem için giriş yapmalısın'); go('login'); return true; }
+const catBySlug = s => S.cats.find(c => c.slug === s);
+
+/* ---------- Ekranlar ---------- */
+const SCREENS = {
+  home(){
+    header();
+    const cats = S.cats.filter(c => c.grp === S.mode);
+    $('view').innerHTML = `
+      <div class="hero">
+        <h1>Ne arızalandı?</h1>
+        <div class="seg"><button class="${S.mode==='arac'?'on':''}" onclick="S.mode='arac';go('home',null,false)">🚗 Aracım</button><button class="${S.mode==='ev'?'on':''}" onclick="S.mode='ev';go('home',null,false)">🏠 Evim</button></div>
+        <div class="ask"><input id="q" placeholder="${S.mode==='arac'?'Örn: araç hararet yaptı':'Örn: evde su gelmiyor'}"><button onclick="diagnose()">Sor</button></div>
+        <div id="dg"></div>
+      </div>
+      <div class="stripe"></div>
+      ${S.mode==='arac'?`<button class="sos" onclick="go('tow')"><span style="font-size:30px">🚨</span><span><b>Yolda kaldım</b>En yakın çekici ve yol yardımı</span></button>`:''}
+      <h2>Kategoriler</h2>
+      <div class="grid">${cats.map(c=>`<button class="cat" onclick="go('list','${c.slug}')"><i>${c.icon||'🔧'}</i>${esc(c.name)}</button>`).join('') || '<p class="muted">Kategoriler yükleniyor…</p>'}</div>
+      <div class="card"><b>Usta mısın?</b><p class="muted">İşletmeni ücretsiz ekle, yakınındaki müşteriler seni bulsun.</p><button class="btn" onclick="go('addBiz')">İşletmemi ekle</button></div>`;
+    $('q').onkeydown = e => { if (e.key==='Enter') diagnose(); };
+  },
+
+  async list(slug){
+    const cat = catBySlug(slug); header(cat ? cat.name : 'Ustalar');
+    $('view').innerHTML = `<p class="muted">Yakındaki ustalar aranıyor…</p>`;
+    const { data, error } = await db.rpc('nearby_providers', { lat:S.lat, lng:S.lng, category_slug:slug, radius_km:50 });
+    if (error) { $('view').innerHTML = `<div class="empty">Liste alınamadı: ${esc(error.message)}</div>`; return; }
+    S.lastList = data;
+    const sortBtns = [['dist','En yakın'],['rate','En yüksek puan'],['price','En uygun']];
+    const render = (mode='dist') => {
+      const arr = [...data].sort({dist:(a,b)=>a.distance_km-b.distance_km, rate:(a,b)=>b.rating_avg-a.rating_avg, price:(a,b)=>(a.min_price??1e9)-(b.min_price??1e9)}[mode]);
+      $('view').innerHTML = `
+        ${S.locOk?'':'<div class="tip">📍 Konum izni vermediğin için İstanbul merkezine göre sıralanıyor.</div><br>'}
+        <div class="tabs">${sortBtns.map(([k,n])=>`<button class="${k===mode?'on':''}" data-s="${k}">${n}</button>`).join('')}</div>
+        ${arr.length ? arr.map((p,i)=>`<button class="card pro" onclick="go('pro','${p.id}')">
+          <div class="av">${esc(p.business_name[0])}</div>
+          <div style="flex:1;min-width:0"><div class="row"><b>${esc(p.business_name)}</b>${p.is_verified?'<span class="badge">✔ Onaylı</span>':''}</div>
+          <div class="muted">${p.distance_km.toFixed(1)} km · ${esc(p.district||'')} ${p.is_24_7?'· 7/24':''}</div>
+          <div class="row"><span class="star">★ ${Number(p.rating_avg).toFixed(1)} <span class="muted">(${p.rating_count})</span></span><b>${p.min_price!=null?tl(p.min_price)+"'den":''}</b></div></div>
+        </button>`).join('')
+        : `<div class="empty">Bu bölgede henüz kayıtlı usta yok.<br>Tanıdığın bir usta varsa Arızamatik'i ona öner.</div>`}`;
+      document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => render(b.dataset.s));
+    };
+    render();
+  },
+
+  async pro(id){
+    header('Usta profili');
+    $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
+    const { data:p, error } = await db.from('providers')
+      .select('id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id)')
+      .eq('id', id).single();
+    if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+    const { data:revs } = await db.from('reviews').select('rating,comment,created_at').eq('provider_id', id).order('created_at',{ascending:false}).limit(10);
+    const near = (S.lastList||[]).find(x => x.id === id);
+    const maps = near ? `https://www.google.com/maps/dir/?api=1&destination=${near.latitude},${near.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.address||'')+' '+(p.district||'')+' '+p.city)}`;
+    const wa = p.whatsapp || p.phone;
+    $('view').innerHTML = `
+      <div class="row" style="justify-content:flex-start;gap:14px"><div class="av" style="width:64px;height:64px">${esc(p.business_name[0])}</div>
+      <div><h2 style="margin:0">${esc(p.business_name)}</h2><div class="muted">${esc(p.contact_name||'')} ${p.is_verified?'· ✔ Onaylı':''}</div>
+      <div class="star">★ ${Number(p.rating_avg).toFixed(1)} <span class="muted">${p.rating_count} değerlendirme</span></div></div></div>
+      <div class="acts">
+        ${p.phone?`<a href="tel:${esc(p.phone)}">📞<br>Ara</a>`:'<button disabled>📞<br>Yok</button>'}
+        <a href="${maps}" target="_blank" rel="noopener">🧭<br>Yol tarifi</a>
+        ${wa?`<a href="https://wa.me/${esc(wa.replace(/\D/g,'').replace(/^0/,'90'))}" target="_blank" rel="noopener">💬<br>WhatsApp</a>`:'<button disabled>💬<br>Yok</button>'}
+      </div>
+      ${p.description?`<p>${esc(p.description)}</p>`:''}
+      <h2>Fiyat listesi</h2>
+      <div class="card">${p.services.length ? p.services.sort((a,b)=>a.price_min-b.price_min).map(s=>`<div class="tr"><span>${esc(s.name)}</span><b>${tl(s.price_min)}${s.price_max?' – '+tl(s.price_max):''}</b></div>`).join('') : '<span class="muted">Fiyat eklenmemiş</span>'}</div>
+      <h2>Bilgiler</h2>
+      <div class="card">
+        <div class="tr"><span>Adres</span><span style="text-align:right">${esc([p.address,p.district,p.city].filter(Boolean).join(', '))}</span></div>
+        <div class="tr"><span>Hizmet</span><span>${p.is_24_7?'7/24 ':''}${p.offers_mobile?'Yerinde servis':'İş yerinde'}</span></div>
+        ${p.working_hours.sort((a,b)=>a.day_of_week-b.day_of_week).map(h=>`<div class="tr"><span>${DAYS[h.day_of_week]}</span><span>${h.is_closed?'Kapalı':(h.opens_at||'').slice(0,5)+' – '+(h.closes_at||'').slice(0,5)}</span></div>`).join('')}
+      </div>
+      <h2>Yorumlar</h2>
+      ${(revs||[]).length ? revs.map(r=>`<div class="card"><span class="star">${'★'.repeat(r.rating)}</span><div>${esc(r.comment||'')}</div></div>`).join('') : '<p class="muted">Henüz yorum yok.</p>'}
+      <label for="jd">Sorununu kısaca yaz</label>
+      <textarea class="in" id="jd" rows="3" placeholder="Örn: sabah çalıştırınca tık tık ses geliyor"></textarea>
+      <button class="btn" id="sendJob">İş talebi gönder</button>`;
+    $('sendJob').onclick = async () => {
+      if (needLogin()) return;
+      const { error } = await db.from('job_requests').insert({
+        user_id:S.user.id, provider_id:id, category_id:p.provider_categories[0]?.category_id ?? null,
+        type:'standard', description:$('jd').value.trim() || null, location: S.locOk ? point() : null
+      });
+      if (error) return toast('Gönderilemedi: ' + error.message);
+      toast('Talebin ustaya iletildi'); S.stack=[]; go('jobs', null, false);
+    };
+  },
+
+  async tow(){
+    header('Yol yardım');
+    await getLocation();
+    const c = catBySlug('cekici');
+    $('view').innerHTML = `<p class="muted">En yakın çekiciler aranıyor…</p>`;
+    const { data } = await db.rpc('nearby_providers', { lat:S.lat, lng:S.lng, category_slug:'cekici', radius_km:80, max_results:10 });
+    S.lastList = data || [];
+    $('view').innerHTML = `
+      <div class="tip">⚠️ Dörtlüleri yak, reflektörü aracın 30 m gerisine koy, mümkünse bariyer arkasında bekle. Yaralı varsa 112'yi ara.</div>
+      ${S.locOk?'':'<div class="tip">📍 Konum izni kapalı. Çekicinin seni bulması için tarayıcı ayarlarından konum iznini aç.</div>'}
+      <h2 style="margin-top:14px">Yakındaki çekiciler</h2>
+      ${S.lastList.length ? S.lastList.map(p=>`<div class="card"><div class="row"><b>${esc(p.business_name)}</b><span class="muted">${p.distance_km.toFixed(1)} km</span></div>
+        <div class="muted">★ ${Number(p.rating_avg).toFixed(1)} ${p.is_24_7?'· 7/24':''} ${p.min_price!=null?'· '+tl(p.min_price)+"'den":''}</div>
+        <div class="acts" style="grid-template-columns:1fr 1fr">${p.phone?`<a href="tel:${esc(p.phone)}">📞 Hemen ara</a>`:''}<button onclick="towRequest('${p.id}')">📍 Konumumu gönder</button></div></div>`).join('')
+      : `<div class="empty">Yakında kayıtlı çekici yok.</div><button class="btn red" onclick="towRequest(null)">Konumumla genel yardım talebi oluştur</button>`}`;
+    window.towRequest = async (providerId) => {
+      if (needLogin()) return;
+      const { error } = await db.from('job_requests').insert({ user_id:S.user.id, provider_id:providerId, category_id:c?.id ?? null, type:'tow', location:S.locOk?point():null, description:'Yol yardım talebi' });
+      if (error) return toast('Gönderilemedi: ' + error.message);
+      toast('Yardım talebin oluşturuldu'); S.stack=[]; go('jobs', null, false);
+    };
+  },
+
+  async stations(type){
+    type = type || 'fuel';
+    header(); await getLocation();
+    const names = {fuel:'⛽ Benzin', ev_charge:'🔌 Şarj', authorized_service:'🏷️ Servis'};
+    $('view').innerHTML = `<div class="tabs">${Object.entries(names).map(([k,n])=>`<button class="${k===type?'on':''}" onclick="go('stations','${k}',false)">${n}</button>`).join('')}</div><div id="stl" class="muted">Aranıyor…</div>`;
+    const { data, error } = await db.rpc('nearby_stations', { lat:S.lat, lng:S.lng, station:type, radius_km:20 });
+    const q = {fuel:'benzin istasyonu', ev_charge:'elektrikli araç şarj istasyonu', authorized_service:'yetkili servis'}[type];
+    const gmaps = `https://www.google.com/maps/search/${encodeURIComponent(q)}/@${S.lat},${S.lng},14z`;
+    $('stl').innerHTML = error ? esc(error.message) : (data.length
+      ? data.map(s=>`<a class="card" style="display:block;color:inherit;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}"><div class="row"><b>${esc(s.name)}</b><span class="muted">${s.distance_km.toFixed(1)} km</span></div><div class="muted">${esc(s.address||'')} ${s.is_24_7?'· 7/24':''}</div></a>`).join('')
+      : `<div class="empty">İstasyon listemiz henüz dolmadı.</div><a class="btn" href="${gmaps}" target="_blank" rel="noopener">Haritada yakındakileri göster</a>`);
+  },
+
+  async jobs(){
+    header();
+    if (!S.user) { $('view').innerHTML = `<div class="empty">Taleplerini görmek için giriş yap.</div><button class="btn" onclick="go('login')">Giriş yap</button>`; return; }
+    $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
+    const { data, error } = await db.from('job_requests')
+      .select('id,user_id,type,status,description,created_at,providers(business_name,phone,owner_id),categories(name)')
+      .order('created_at', {ascending:false});
+    if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+    const ST = {pending:'Onay bekliyor',accepted:'Kabul edildi',rejected:'Reddedildi',on_the_way:'Yolda',in_progress:'Yapılıyor',completed:'Tamamlandı',cancelled:'İptal'};
+    $('view').innerHTML = `<h2>Taleplerim</h2>` + (data.length ? data.map(j=>{
+      const incoming = j.user_id !== S.user.id;
+      return `<div class="card"><div class="row"><b>${incoming?'📥 Gelen iş':(j.type==='tow'?'🚛 Yol yardım':'🔧 '+esc(j.providers?.business_name||'Talep'))}</b><span class="badge">${ST[j.status]}</span></div>
+        <div class="muted">${esc(j.categories?.name||'')} · ${new Date(j.created_at).toLocaleString('tr-TR')}</div>
+        ${j.description?`<div>${esc(j.description)}</div>`:''}
+        ${incoming && j.status==='pending' ? `<div class="acts" style="grid-template-columns:1fr 1fr"><button onclick="setStatus('${j.id}','accepted')">✔ Kabul et</button><button onclick="setStatus('${j.id}','rejected')">✖ Reddet</button></div>`:''}
+        ${incoming && j.status==='accepted' ? `<button class="btn alt" onclick="setStatus('${j.id}','completed')">İş tamamlandı</button>`:''}
+        ${!incoming && j.status==='pending' ? `<button class="btn alt" onclick="setStatus('${j.id}','cancelled')">Talebi iptal et</button>`:''}
+      </div>`;}).join('') : `<div class="empty">Henüz talebin yok.</div>`);
+    window.setStatus = async (id, status) => {
+      const { error } = await db.from('job_requests').update({ status, updated_at:new Date().toISOString() }).eq('id', id);
+      error ? toast(error.message) : go('jobs', null, false);
+    };
+  },
+
+  addBiz(){
+    header('İşletmemi ekle');
+    if (!S.user) { $('view').innerHTML = `<div class="empty">İşletme eklemek için önce giriş yap veya kayıt ol.</div><button class="btn" onclick="go('login')">Giriş yap</button>`; return; }
+    const sel = new Set();
+    $('view').innerHTML = `
+      <label>İşletme adı *</label><input class="in" id="b_name" placeholder="Örn: Kaya Oto Sanayi">
+      <label>Yetkili adı</label><input class="in" id="b_contact">
+      <label>Telefon *</label><input class="in" id="b_phone" type="tel" placeholder="05xx xxx xx xx">
+      <label>Şehir *</label><input class="in" id="b_city" placeholder="Örn: Konya">
+      <label>İlçe</label><input class="in" id="b_district">
+      <label>Açık adres</label><input class="in" id="b_addr">
+      <label>Hizmet verdiğin alanlar *</label><div class="checks" id="b_cats">${S.cats.map(c=>`<button class="chk" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
+      <label>Seçenekler</label><div class="checks"><button class="chk" id="b_247">7/24 hizmet</button><button class="chk" id="b_mob">Yerinde servis</button></div>
+      <label>Fiyat listesi (en az bir iş)</label>
+      ${[1,2,3].map(i=>`<div class="row" style="margin-bottom:6px"><input class="in" id="s_n${i}" placeholder="Örn: Lastik tamiri"><input class="in" id="s_p${i}" type="number" inputmode="numeric" placeholder="₺" style="max-width:100px"></div>`).join('')}
+      <div class="tip">📍 İşletmenin konumu olarak <b>şu an bulunduğun yer</b> kaydedilecek. Bu formu iş yerindeyken doldur.</div>
+      <button class="btn" id="b_save">İşletmemi kaydet</button>`;
+    $('b_cats').onclick = e => { const b=e.target.closest('[data-id]'); if(!b) return; const id=+b.dataset.id; sel.has(id)?sel.delete(id):sel.add(id); b.classList.toggle('on'); };
+    ['b_247','b_mob'].forEach(id => $(id).onclick = e => e.target.classList.toggle('on'));
+    $('b_save').onclick = async () => {
+      const v = id => $(id).value.trim();
+      if (!v('b_name') || !v('b_phone') || !v('b_city') || !sel.size) return toast('Yıldızlı alanları doldur ve en az bir alan seç');
+      await getLocation();
+      if (!S.locOk) return toast('Konum izni gerekli. Tarayıcı ayarlarından konuma izin ver.');
+      $('b_save').disabled = true; $('b_save').textContent = 'Kaydediliyor…';
+      const { data:biz, error } = await db.from('providers').insert({
+        owner_id:S.user.id, business_name:v('b_name'), contact_name:v('b_contact')||null, phone:v('b_phone'),
+        city:v('b_city'), district:v('b_district')||null, address:v('b_addr')||null, location:point(),
+        is_24_7:$('b_247').classList.contains('on'), offers_mobile:$('b_mob').classList.contains('on')
+      }).select('id').single();
+      if (error) { $('b_save').disabled=false; $('b_save').textContent='İşletmemi kaydet'; return toast('Kaydedilemedi: '+error.message); }
+      const catIds = [...sel];
+      await db.from('provider_categories').insert(catIds.map(category_id => ({ provider_id:biz.id, category_id })));
+      const services = [1,2,3].map(i => ({ name:v('s_n'+i), price:v('s_p'+i) })).filter(s => s.name && s.price)
+        .map(s => ({ provider_id:biz.id, category_id:catIds[0], name:s.name, price_min:Number(s.price) }));
+      if (services.length) await db.from('services').insert(services);
+      toast('İşletmen eklendi 🎉'); S.stack=[]; go('pro', biz.id, false);
+    };
+  },
+
+  login(){
+    header('Giriş yap');
+    $('view').innerHTML = `
+      <label>E-posta</label><input class="in" id="l_mail" type="email" autocomplete="email">
+      <label>Şifre (en az 6 karakter)</label><input class="in" id="l_pass" type="password" autocomplete="current-password">
+      <div id="nameWrap" style="display:none"><label>Ad soyad</label><input class="in" id="l_name"></div>
+      <button class="btn" id="l_go">Giriş yap</button>
+      <button class="btn alt" id="l_sw">Hesabın yok mu? Kayıt ol</button>`;
+    let signup = false;
+    $('l_sw').onclick = () => { signup=!signup; $('nameWrap').style.display=signup?'block':'none'; $('l_go').textContent=signup?'Kayıt ol':'Giriş yap'; $('l_sw').textContent=signup?'Zaten hesabın var mı? Giriş yap':'Hesabın yok mu? Kayıt ol'; };
+    $('l_go').onclick = async () => {
+      const email=$('l_mail').value.trim(), password=$('l_pass').value;
+      if (!email || password.length < 6) return toast('E-posta ve en az 6 karakterlik şifre gir');
+      const res = signup
+        ? await db.auth.signUp({ email, password, options:{ data:{ full_name:$('l_name').value.trim() } } })
+        : await db.auth.signInWithPassword({ email, password });
+      if (res.error) return toast(res.error.message.includes('Invalid login') ? 'E-posta veya şifre hatalı' : res.error.message);
+      if (signup && !res.data.session) return toast('E-postana gelen doğrulama linkine tıkla, sonra giriş yap');
+      toast('Hoş geldin!'); back();
+    };
+  },
+
+  async account(){
+    header();
+    if (!S.user) { $('view').innerHTML = `<div class="empty">Giriş yaparak talep oluşturabilir, işletmeni ekleyebilirsin.</div><button class="btn" onclick="go('login')">Giriş yap / Kayıt ol</button>`; return; }
+    const { data:mine } = await db.from('providers').select('id,business_name').eq('owner_id', S.user.id);
+    $('view').innerHTML = `
+      <h2>Hesabım</h2><div class="card"><div class="muted">E-posta</div><b>${esc(S.user.email)}</b></div>
+      <h2>İşletmelerim</h2>
+      ${(mine||[]).map(b=>`<button class="card pro" onclick="go('pro','${b.id}')"><div class="av">${esc(b.business_name[0])}</div><b style="align-self:center">${esc(b.business_name)}</b></button>`).join('') || '<p class="muted">Kayıtlı işletmen yok.</p>'}
+      <button class="btn alt" onclick="go('addBiz')">+ İşletme ekle</button>
+      <button class="btn red" onclick="db.auth.signOut().then(()=>go('home',null,false))">Çıkış yap</button>`;
+  }
+};
+
+/* ---------- Yardimcilar ---------- */
+function diagnose(){
+  const text = $('q').value.toLocaleLowerCase('tr-TR').trim();
+  if (!text) return $('q').focus();
+  const r = RULES.find(x => x.k.some(k => text.includes(k)));
+  if (!r) { $('dg').innerHTML = `<div class="tip" style="color:var(--ink)">Biraz daha detay yaz (hangi parça/cihaz, ses, koku, ışık) ya da aşağıdan kategori seç.</div>`; return; }
+  const c = catBySlug(r.slug);
+  $('dg').innerHTML = `<div class="card" style="margin-top:10px;color:var(--ink)"><b>${esc(r.t)}</b><div class="tip">⚠️ ${esc(r.tip)}</div>
+    <button class="btn" onclick="go('list','${r.slug}')">${esc(c?.name||'Ustaları')} ustalarını gör</button>
+    <p class="muted" style="margin-top:6px">Bu bir ön yönlendirmedir, kesin tespiti usta yapar.</p></div>`;
+}
+function getLocation(){
+  return new Promise(res => {
+    if (!navigator.geolocation) return res();
+    navigator.geolocation.getCurrentPosition(
+      p => { S.lat=p.coords.latitude; S.lng=p.coords.longitude; S.locOk=true; res(); },
+      () => res(), { enableHighAccuracy:true, timeout:8000, maximumAge:60000 });
+  });
+}
+
+/* ---------- Baslat ---------- */
+(async function init(){
+  if (!configured) {
+    header(); $('view').innerHTML = `<div class="card"><h2>Kurulum eksik</h2><p>index.html dosyasının içinde <b>BURAYA_PROJECT_URL</b> ve <b>BURAYA_ANON_KEY</b> yazan yerlere Supabase bilgilerini yapıştır.</p></div>`;
+    return;
+  }
+  const { data:{ session } } = await db.auth.getSession();
+  S.user = session?.user || null;
+  db.auth.onAuthStateChange((_e, s) => { S.user = s?.user || null; });
+  go('home', null, false);
+  const { data } = await db.from('categories').select('*').order('sort_order');
+  S.cats = data || [];
+  if (S.cur?.name === 'home') go('home', null, false);
+  getLocation().then(() => { if (S.cur?.name === 'home') header(); });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
