@@ -70,6 +70,16 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-w
 nav button{flex:1;display:flex;flex-direction:column;align-items:center;font-size:11px;font-weight:600;color:var(--steel)}
 nav button i{font-style:normal;font-size:21px}
 nav button.on{color:var(--ink)}
+.stars{display:flex;gap:6px;margin:6px 0 4px}
+.stars button{font-size:42px;color:var(--line);line-height:1}
+.stars button.on{color:#F2A900}
+.msgs{display:flex;flex-direction:column;gap:8px;padding-bottom:80px}
+.bub{align-self:flex-start;max-width:82%;background:var(--card);border:1px solid var(--line);padding:9px 12px;border-radius:14px;border-bottom-left-radius:4px;word-wrap:break-word}
+.bub.me{align-self:flex-end;background:var(--asphalt);color:#fff;border-color:var(--asphalt);border-bottom-left-radius:14px;border-bottom-right-radius:4px}
+.bub small{display:block;font-size:11px;opacity:.7;margin-top:2px}
+.composer{position:fixed;bottom:calc(58px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;gap:8px;padding:8px 12px;background:var(--paper);border-top:1px solid var(--line);z-index:6}
+.badge.warn{background:rgba(242,169,0,.22);color:#8a5d00}
+.badge.bad{background:rgba(214,54,47,.15);color:var(--red)}
 .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;display:none;z-index:9;max-width:90%}
 </style>
 </head>
@@ -81,6 +91,7 @@ nav button.on{color:var(--ink)}
     <button data-n="home" class="on"><i>🏠</i>Ana sayfa</button>
     <button data-n="stations"><i>📍</i>Yakınımda</button>
     <button data-n="jobs"><i>🧾</i>Taleplerim</button>
+    <button data-n="garage"><i>🚗</i>Garajım</button>
     <button data-n="account"><i>👤</i>Hesabım</button>
   </nav>
 </div>
@@ -122,6 +133,7 @@ const RULES = [
 
 /* ---------- Navigasyon ---------- */
 function go(name, arg, push=true){
+  if (S.channel) { db.removeChannel(S.channel); S.channel = null; }
   if (push && S.cur) S.stack.push([S.cur.name, S.cur.arg]);
   S.cur = {name, arg};
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.n === name));
@@ -151,11 +163,13 @@ const SCREENS = {
         <div id="dg"></div>
       </div>
       <div class="stripe"></div>
+      <div id="rem"></div>
       ${S.mode==='arac'?`<button class="sos" onclick="go('tow')"><span style="font-size:30px">🚨</span><span><b>Yolda kaldım</b>En yakın çekici ve yol yardımı</span></button>`:''}
       <h2>Kategoriler</h2>
       <div class="grid">${cats.map(c=>`<button class="cat" onclick="go('list','${c.slug}')"><i>${c.icon||'🔧'}</i>${esc(c.name)}</button>`).join('') || '<p class="muted">Kategoriler yükleniyor…</p>'}</div>
       <div class="card"><b>Usta mısın?</b><p class="muted">İşletmeni ücretsiz ekle, yakınındaki müşteriler seni bulsun.</p><button class="btn" onclick="go('addBiz')">İşletmemi ekle</button></div>`;
     $('q').onkeydown = e => { if (e.key==='Enter') diagnose(); };
+    loadReminders();
   },
 
   async list(slug){
@@ -186,13 +200,14 @@ const SCREENS = {
     header('Usta profili');
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
     const { data:p, error } = await db.from('providers')
-      .select('id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id)')
+      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id)')
       .eq('id', id).single();
     if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
     const { data:revs } = await db.from('reviews').select('rating,comment,created_at').eq('provider_id', id).order('created_at',{ascending:false}).limit(10);
     const near = (S.lastList||[]).find(x => x.id === id);
     const maps = near ? `https://www.google.com/maps/dir/?api=1&destination=${near.latitude},${near.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.address||'')+' '+(p.district||'')+' '+p.city)}`;
     const wa = p.whatsapp || p.phone;
+    const isOwner = S.user && p.owner_id === S.user.id;
     $('view').innerHTML = `
       <div class="row" style="justify-content:flex-start;gap:14px"><div class="av" style="width:64px;height:64px">${esc(p.business_name[0])}</div>
       <div><h2 style="margin:0">${esc(p.business_name)}</h2><div class="muted">${esc(p.contact_name||'')} ${p.is_verified?'· ✔ Onaylı':''}</div>
@@ -213,10 +228,11 @@ const SCREENS = {
       </div>
       <h2>Yorumlar</h2>
       ${(revs||[]).length ? revs.map(r=>`<div class="card"><span class="star">${'★'.repeat(r.rating)}</span><div>${esc(r.comment||'')}</div></div>`).join('') : '<p class="muted">Henüz yorum yok.</p>'}
+      ${isOwner ? `<div class="tip">Bu senin işletmen. Müşteriler profilini böyle görüyor.</div><button class="btn" onclick="go('bizEdit','${p.id}')">✏️ Profilimi düzenle</button>` : `
       <label for="jd">Sorununu kısaca yaz</label>
       <textarea class="in" id="jd" rows="3" placeholder="Örn: sabah çalıştırınca tık tık ses geliyor"></textarea>
-      <button class="btn" id="sendJob">İş talebi gönder</button>`;
-    $('sendJob').onclick = async () => {
+      <button class="btn" id="sendJob">İş talebi gönder</button>`}`;
+    if ($('sendJob')) $('sendJob').onclick = async () => {
       if (needLogin()) return;
       const { error } = await db.from('job_requests').insert({
         user_id:S.user.id, provider_id:id, category_id:p.provider_categories[0]?.category_id ?? null,
@@ -267,23 +283,238 @@ const SCREENS = {
     header();
     if (!S.user) { $('view').innerHTML = `<div class="empty">Taleplerini görmek için giriş yap.</div><button class="btn" onclick="go('login')">Giriş yap</button>`; return; }
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
-    const { data, error } = await db.from('job_requests')
-      .select('id,user_id,type,status,description,created_at,providers(business_name,phone,owner_id),categories(name)')
-      .order('created_at', {ascending:false});
+    const [{ data, error }, { data:myRevs }] = await Promise.all([
+      db.from('job_requests').select('id,user_id,provider_id,type,status,description,created_at,providers(business_name,phone,owner_id),categories(name)').order('created_at', {ascending:false}),
+      db.from('reviews').select('job_id').eq('user_id', S.user.id)
+    ]);
     if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+    const reviewed = new Set((myRevs||[]).map(r => r.job_id));
     const ST = {pending:'Onay bekliyor',accepted:'Kabul edildi',rejected:'Reddedildi',on_the_way:'Yolda',in_progress:'Yapılıyor',completed:'Tamamlandı',cancelled:'İptal'};
-    $('view').innerHTML = `<h2>Taleplerim</h2>` + (data.length ? data.map(j=>{
+    $('view').innerHTML = `<h2>Taleplerim</h2>` + (data.length ? data.map(j => {
       const incoming = j.user_id !== S.user.id;
-      return `<div class="card"><div class="row"><b>${incoming?'📥 Gelen iş':(j.type==='tow'?'🚛 Yol yardım':'🔧 '+esc(j.providers?.business_name||'Talep'))}</b><span class="badge">${ST[j.status]}</span></div>
+      const title = incoming ? '📥 Gelen iş' : (j.type==='tow' ? '🚛 Yol yardım' : '🔧 ' + esc(j.providers?.business_name || 'Talep'));
+      let a = '';
+      if (incoming && j.status==='pending') a += `<div class="acts" style="grid-template-columns:1fr 1fr"><button onclick="setStatus('${j.id}','accepted')">✔ Kabul et</button><button onclick="setStatus('${j.id}','rejected')">✖ Reddet</button></div>`;
+      if (['accepted','on_the_way','in_progress'].includes(j.status)) a += `<button class="btn alt" onclick="setStatus('${j.id}','completed')">✔ İş tamamlandı</button>`;
+      if (!incoming && j.status==='pending') a += `<button class="btn alt" onclick="setStatus('${j.id}','cancelled')">Talebi iptal et</button>`;
+      if (!incoming && j.status==='completed' && j.provider_id && !reviewed.has(j.id)) a += `<button class="btn" onclick="go('review','${j.id}|${j.provider_id}')">⭐ Ustayı değerlendir</button>`;
+      if (!incoming && reviewed.has(j.id)) a += `<div class="muted" style="margin-top:8px">✔ Değerlendirdin, teşekkürler</div>`;
+      if (j.provider_id && !['rejected','cancelled'].includes(j.status)) a += `<button class="btn alt" onclick="go('chat','${j.id}')">💬 Mesajlar</button>`;
+      return `<div class="card"><div class="row"><b>${title}</b><span class="badge">${ST[j.status]}</span></div>
         <div class="muted">${esc(j.categories?.name||'')} · ${new Date(j.created_at).toLocaleString('tr-TR')}</div>
-        ${j.description?`<div>${esc(j.description)}</div>`:''}
-        ${incoming && j.status==='pending' ? `<div class="acts" style="grid-template-columns:1fr 1fr"><button onclick="setStatus('${j.id}','accepted')">✔ Kabul et</button><button onclick="setStatus('${j.id}','rejected')">✖ Reddet</button></div>`:''}
-        ${incoming && j.status==='accepted' ? `<button class="btn alt" onclick="setStatus('${j.id}','completed')">İş tamamlandı</button>`:''}
-        ${!incoming && j.status==='pending' ? `<button class="btn alt" onclick="setStatus('${j.id}','cancelled')">Talebi iptal et</button>`:''}
-      </div>`;}).join('') : `<div class="empty">Henüz talebin yok.</div>`);
+        ${j.description?`<div>${esc(j.description)}</div>`:''}${a}</div>`;
+    }).join('') : `<div class="empty">Henüz talebin yok.</div>`);
     window.setStatus = async (id, status) => {
       const { error } = await db.from('job_requests').update({ status, updated_at:new Date().toISOString() }).eq('id', id);
       error ? toast(error.message) : go('jobs', null, false);
+    };
+  },
+
+  review(arg){
+    header('Değerlendir');
+    if (!S.user) return go('login');
+    const [jobId, providerId] = String(arg).split('|');
+    let rating = 0;
+    $('view').innerHTML = `<h2>Ustadan memnun kaldın mı?</h2>
+      <div class="stars" id="stars">${[1,2,3,4,5].map(n=>`<button data-r="${n}" aria-label="${n} yıldız">★</button>`).join('')}</div>
+      <label for="rv">Yorumun (isteğe bağlı)</label>
+      <textarea class="in" id="rv" rows="4" placeholder="Hızlı mıydı, fiyat dürüst müydü, işini iyi yaptı mı?"></textarea>
+      <button class="btn" id="rvSave">Değerlendirmeyi gönder</button>`;
+    $('stars').onclick = e => { const b = e.target.closest('[data-r]'); if (!b) return; rating = +b.dataset.r; document.querySelectorAll('#stars button').forEach(x => x.classList.toggle('on', +x.dataset.r <= rating)); };
+    $('rvSave').onclick = async () => {
+      if (!rating) return toast('Önce yıldız seç');
+      const { error } = await db.from('reviews').insert({ job_id:jobId, user_id:S.user.id, provider_id:providerId, rating, comment:$('rv').value.trim() || null });
+      if (error) return toast('Gönderilemedi: ' + error.message);
+      toast('Teşekkürler! Değerlendirmen kaydedildi'); S.stack=[]; go('jobs', null, false);
+    };
+  },
+
+  async chat(jobId){
+    header('Mesajlar');
+    if (!S.user) return go('login');
+    $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
+    const { data:job, error } = await db.from('job_requests').select('id,user_id,description,providers(business_name)').eq('id', jobId).single();
+    if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+    header(job.user_id === S.user.id ? (job.providers?.business_name || 'Usta') : 'Müşteri');
+    $('view').innerHTML = `${job.description?`<div class="tip">📝 ${esc(job.description)}</div><br>`:''}
+      <div class="msgs" id="msgs"><p class="muted" id="noMsg">Henüz mesaj yok. İlk mesajı sen yaz.</p></div>
+      <div class="composer"><input class="in" id="mIn" placeholder="Mesaj yaz…" aria-label="Mesaj yaz"><button class="btn" id="mSend" style="width:auto;margin:0">Gönder</button></div>`;
+    const seen = new Set();
+    const add = m => {
+      if (!m || seen.has(m.id) || !$('msgs')) return; seen.add(m.id);
+      $('noMsg')?.remove();
+      const mine = m.sender_id === S.user.id;
+      $('msgs').insertAdjacentHTML('beforeend', `<div class="bub ${mine?'me':''}">${esc(m.body)}<small>${new Date(m.created_at).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})}</small></div>`);
+      window.scrollTo(0, document.body.scrollHeight);
+    };
+    const { data:msgs } = await db.from('messages').select('*').eq('job_id', jobId).order('created_at');
+    (msgs || []).forEach(add);
+    S.channel = db.channel('msg-' + jobId)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:`job_id=eq.${jobId}` }, pl => add(pl.new))
+      .subscribe();
+    const send = async () => {
+      const body = $('mIn').value.trim(); if (!body) return;
+      $('mIn').value = '';
+      const { data:m, error } = await db.from('messages').insert({ job_id:jobId, sender_id:S.user.id, body }).select().single();
+      if (error) { $('mIn').value = body; return toast('Gönderilemedi: ' + error.message); }
+      add(m);
+    };
+    $('mSend').onclick = send;
+    $('mIn').onkeydown = e => { if (e.key === 'Enter') send(); };
+  },
+
+  async garage(){
+    header();
+    if (!S.user) { $('view').innerHTML = `<div class="empty">Aracını ekleyip muayene ve sigorta hatırlatması almak için giriş yap.</div><button class="btn" onclick="go('login')">Giriş yap</button>`; return; }
+    $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
+    const { data, error } = await db.from('vehicles').select('*').order('created_at');
+    if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+    $('view').innerHTML = `<h2>Garajım</h2>
+      ${data.length ? data.map(v => `<div class="card"><div class="row"><b>🚗 ${esc(v.brand)} ${esc(v.model)}</b><span class="muted">${esc(v.plate)}</span></div>
+        <div class="muted">${[v.year, v.fuel_type].filter(Boolean).map(esc).join(' · ')}</div>
+        <div class="tr"><span>Muayene</span>${dueBadge(v.inspection_date)}</div>
+        <div class="tr"><span>Sigorta / kasko</span>${dueBadge(v.insurance_date)}</div>
+        <div class="acts" style="grid-template-columns:1fr 1fr"><button onclick="go('vehicle','${v.id}')">✏️ Düzenle</button><button onclick="delVehicle('${v.id}')">🗑️ Sil</button></div></div>`).join('')
+      : `<div class="empty">Henüz araç eklemedin. Aracını ekle, muayene ve sigorta tarihi yaklaşınca uygulamada hatırlatalım.</div>`}
+      <button class="btn" onclick="go('vehicle')">+ Araç ekle</button>`;
+    window.delVehicle = async id => {
+      if (!confirm('Bu aracı silmek istiyor musun?')) return;
+      const { error } = await db.from('vehicles').delete().eq('id', id);
+      error ? toast(error.message) : go('garage', null, false);
+    };
+  },
+
+  async vehicle(id){
+    header(id ? 'Aracı düzenle' : 'Araç ekle');
+    if (!S.user) return go('login');
+    let v = {};
+    if (id) { const { data } = await db.from('vehicles').select('*').eq('id', id).single(); v = data || {}; }
+    const fuels = ['Benzin','Dizel','LPG','Hibrit','Elektrik'];
+    $('view').innerHTML = `
+      <label>Marka *</label><input class="in" id="v_brand" value="${esc(v.brand)}" placeholder="Örn: Renault">
+      <label>Model</label><input class="in" id="v_model" value="${esc(v.model)}" placeholder="Örn: Clio">
+      <label>Model yılı</label><input class="in" id="v_year" type="number" inputmode="numeric" value="${esc(v.year)}" placeholder="Örn: 2018">
+      <label>Plaka</label><input class="in" id="v_plate" value="${esc(v.plate)}" placeholder="34 ABC 123">
+      <label>Yakıt</label><select class="in" id="v_fuel"><option value="">Seç</option>${fuels.map(f => `<option ${v.fuel_type===f?'selected':''}>${f}</option>`).join('')}</select>
+      <label>Muayene bitiş tarihi</label><input class="in" id="v_insp" type="date" value="${esc(v.inspection_date)}">
+      <label>Sigorta / kasko bitiş tarihi</label><input class="in" id="v_ins" type="date" value="${esc(v.insurance_date)}">
+      <button class="btn" id="v_save">Kaydet</button>`;
+    $('v_save').onclick = async () => {
+      const val = x => $(x).value.trim() || null;
+      if (!val('v_brand')) return toast('Marka yaz');
+      const year = val('v_year') ? Number(val('v_year')) : null;
+      if (year && (year < 1950 || year > 2100)) return toast('Model yılını kontrol et');
+      const row = { brand:val('v_brand'), model:val('v_model'), year, plate:val('v_plate') ? val('v_plate').toLocaleUpperCase('tr-TR') : null, fuel_type:val('v_fuel'), inspection_date:val('v_insp'), insurance_date:val('v_ins') };
+      const { error } = id ? await db.from('vehicles').update(row).eq('id', id) : await db.from('vehicles').insert({ ...row, user_id:S.user.id });
+      if (error) return toast('Kaydedilemedi: ' + error.message);
+      toast('Araç kaydedildi'); S.stack=[]; go('garage', null, false);
+    };
+  },
+
+  async bizEdit(id){
+    header('Usta paneli');
+    if (!S.user) return go('login');
+    $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
+    const { data:p, error } = await db.from('providers')
+      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,services(id,name,price_min,price_max,category_id),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id)')
+      .eq('id', id).single();
+    if (error || p.owner_id !== S.user.id) { $('view').innerHTML = `<div class="empty">Bu işletmeyi düzenleme yetkin yok.</div>`; return; }
+    const sel = new Set(p.provider_categories.map(x => x.category_id));
+    const hours = Object.fromEntries(p.working_hours.map(x => [x.day_of_week, x]));
+    const order = [1,2,3,4,5,6,0];
+    const catOptions = () => S.cats.filter(c => sel.has(c.id)).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    $('view').innerHTML = `
+      <h2 style="margin-bottom:12px">${esc(p.business_name)}</h2>
+      <div class="tabs"><button class="on" data-t="info">Bilgiler</button><button data-t="price">Fiyatlar</button><button data-t="hours">Saatler</button></div>
+      <div data-p="info">
+        <label>İşletme adı *</label><input class="in" id="e_name" value="${esc(p.business_name)}">
+        <label>Yetkili adı</label><input class="in" id="e_contact" value="${esc(p.contact_name)}">
+        <label>Telefon *</label><input class="in" id="e_phone" type="tel" value="${esc(p.phone)}">
+        <label>WhatsApp (farklıysa)</label><input class="in" id="e_wa" type="tel" value="${esc(p.whatsapp)}">
+        <label>Şehir *</label><input class="in" id="e_city" value="${esc(p.city)}">
+        <label>İlçe</label><input class="in" id="e_district" value="${esc(p.district)}">
+        <label>Açık adres</label><input class="in" id="e_addr" value="${esc(p.address)}">
+        <label>İşletme tanıtımı</label><textarea class="in" id="e_desc" rows="3" placeholder="Kaç yıllık tecrübe, hangi markalar, garanti veriyor musun…">${esc(p.description)}</textarea>
+        <label>Hizmet alanları</label><div class="checks" id="e_cats">${S.cats.map(c => `<button class="chk ${sel.has(c.id)?'on':''}" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
+        <label>Seçenekler</label><div class="checks"><button class="chk ${p.is_24_7?'on':''}" id="e_247">7/24 hizmet</button><button class="chk ${p.offers_mobile?'on':''}" id="e_mob">Yerinde servis</button></div>
+        <button class="btn alt" id="e_loc">📍 Konumu şu anki yerimle güncelle</button>
+        <button class="btn" id="e_save">Bilgileri kaydet</button>
+      </div>
+      <div data-p="price" style="display:none">
+        <div class="card" id="e_prices"></div>
+        <label>Yeni fiyat ekle</label>
+        <input class="in" id="n_name" placeholder="Örn: Rot balans">
+        <div class="row" style="margin-top:6px"><input class="in" id="n_min" type="number" inputmode="numeric" placeholder="En az ₺"><input class="in" id="n_max" type="number" inputmode="numeric" placeholder="En çok ₺"></div>
+        <select class="in" id="n_cat" style="margin-top:6px">${catOptions()}</select>
+        <button class="btn" id="n_add">Fiyatı ekle</button>
+      </div>
+      <div data-p="hours" style="display:none">
+        ${order.map(d => { const x = hours[d] || {}; return `<div class="card"><div class="row"><b>${DAYS[d]}</b><button class="chk ${x.is_closed?'on':''}" data-closed="${d}">Kapalı</button></div>
+          <div class="row" style="margin-top:6px"><input class="in" type="time" id="h_o${d}" value="${esc((x.opens_at||'08:30').slice(0,5))}"><input class="in" type="time" id="h_c${d}" value="${esc((x.closes_at||'19:00').slice(0,5))}"></div></div>`; }).join('')}
+        <button class="btn" id="h_save">Saatleri kaydet</button>
+      </div>
+      <button class="btn alt" onclick="go('pro','${p.id}')">👁️ Profilimi müşteri gözüyle gör</button>`;
+
+    document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
+      document.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('on', x === b));
+      document.querySelectorAll('[data-p]').forEach(x => x.style.display = x.dataset.p === b.dataset.t ? 'block' : 'none');
+    });
+
+    // Bilgiler
+    $('e_cats').onclick = e => { const b = e.target.closest('[data-id]'); if (!b) return; const cid = +b.dataset.id; sel.has(cid) ? sel.delete(cid) : sel.add(cid); b.classList.toggle('on'); };
+    ['e_247','e_mob'].forEach(x => $(x).onclick = e => e.currentTarget.classList.toggle('on'));
+    let newLoc = null;
+    $('e_loc').onclick = async () => { await getLocation(); if (!S.locOk) return toast('Konum izni gerekli'); newLoc = point(); $('e_loc').textContent = '📍 Yeni konum alındı, kaydetmeyi unutma'; };
+    $('e_save').onclick = async () => {
+      const v = x => $(x).value.trim();
+      if (!v('e_name') || !v('e_phone') || !v('e_city')) return toast('İşletme adı, telefon ve şehir zorunlu');
+      if (!sel.size) return toast('En az bir hizmet alanı seç');
+      const upd = { business_name:v('e_name'), contact_name:v('e_contact')||null, phone:v('e_phone'), whatsapp:v('e_wa')||null, city:v('e_city'), district:v('e_district')||null, address:v('e_addr')||null, description:v('e_desc')||null, is_24_7:$('e_247').classList.contains('on'), offers_mobile:$('e_mob').classList.contains('on') };
+      if (newLoc) upd.location = newLoc;
+      const { error } = await db.from('providers').update(upd).eq('id', p.id);
+      if (error) return toast('Kaydedilemedi: ' + error.message);
+      const oldCats = new Set(p.provider_categories.map(x => x.category_id));
+      const toAdd = [...sel].filter(c => !oldCats.has(c));
+      const toDel = [...oldCats].filter(c => !sel.has(c));
+      if (toAdd.length) await db.from('provider_categories').insert(toAdd.map(category_id => ({ provider_id:p.id, category_id })));
+      if (toDel.length) await db.from('provider_categories').delete().eq('provider_id', p.id).in('category_id', toDel);
+      p.provider_categories = [...sel].map(category_id => ({ category_id }));
+      $('n_cat').innerHTML = catOptions();
+      newLoc = null; $('e_loc').textContent = '📍 Konumu şu anki yerimle güncelle';
+      toast('Bilgiler kaydedildi');
+    };
+
+    // Fiyatlar
+    let prices = p.services;
+    const renderPrices = () => $('e_prices').innerHTML = prices.length
+      ? [...prices].sort((a,b) => a.price_min - b.price_min).map(s => `<div class="tr"><span>${esc(s.name)}<br><b>${tl(s.price_min)}${s.price_max ? ' – ' + tl(s.price_max) : ''}</b></span><button class="chk" onclick="delPrice('${s.id}')">🗑️ Sil</button></div>`).join('')
+      : '<span class="muted">Henüz fiyat eklemedin. Fiyatı olan ustalar daha çok tercih ediliyor.</span>';
+    renderPrices();
+    window.delPrice = async sid => {
+      if (!confirm('Bu fiyatı silmek istiyor musun?')) return;
+      const { error } = await db.from('services').delete().eq('id', sid);
+      if (error) return toast(error.message);
+      prices = prices.filter(s => s.id !== sid); renderPrices(); toast('Silindi');
+    };
+    $('n_add').onclick = async () => {
+      const name = $('n_name').value.trim(), min = $('n_min').value, max = $('n_max').value, cat = $('n_cat').value;
+      if (!name || !min) return toast('İş adı ve en az fiyatı yaz');
+      if (!cat) return toast('Önce Bilgiler sekmesinde hizmet alanı seçip kaydet');
+      if (max && Number(max) < Number(min)) return toast('En çok fiyat, en az fiyattan küçük olamaz');
+      const { data:s, error } = await db.from('services').insert({ provider_id:p.id, category_id:Number(cat), name, price_min:Number(min), price_max:max ? Number(max) : null }).select('id,name,price_min,price_max,category_id').single();
+      if (error) return toast('Eklenemedi: ' + error.message);
+      prices.push(s); renderPrices(); ['n_name','n_min','n_max'].forEach(x => $(x).value = ''); toast('Fiyat eklendi');
+    };
+
+    // Saatler
+    document.querySelectorAll('[data-closed]').forEach(b => b.onclick = () => b.classList.toggle('on'));
+    $('h_save').onclick = async () => {
+      const rows = order.map(d => {
+        const closed = document.querySelector(`[data-closed="${d}"]`).classList.contains('on');
+        return { provider_id:p.id, day_of_week:d, is_closed:closed, opens_at:closed ? null : ($('h_o'+d).value || null), closes_at:closed ? null : ($('h_c'+d).value || null) };
+      });
+      const { error } = await db.from('working_hours').upsert(rows, { onConflict:'provider_id,day_of_week' });
+      error ? toast('Kaydedilemedi: ' + error.message) : toast('Çalışma saatleri kaydedildi');
     };
   },
 
@@ -356,8 +587,9 @@ const SCREENS = {
     $('view').innerHTML = `
       <h2>Hesabım</h2><div class="card"><div class="muted">E-posta</div><b>${esc(S.user.email)}</b></div>
       <h2>İşletmelerim</h2>
-      ${(mine||[]).map(b=>`<button class="card pro" onclick="go('pro','${b.id}')"><div class="av">${esc(b.business_name[0])}</div><b style="align-self:center">${esc(b.business_name)}</b></button>`).join('') || '<p class="muted">Kayıtlı işletmen yok.</p>'}
+      ${(mine||[]).map(b=>`<button class="card pro" onclick="go('bizEdit','${b.id}')"><div class="av">${esc(b.business_name[0])}</div><div style="align-self:center"><b>${esc(b.business_name)}</b><div class="muted">✏️ Usta panelini aç</div></div></button>`).join('') || '<p class="muted">Kayıtlı işletmen yok.</p>'}
       <button class="btn alt" onclick="go('addBiz')">+ İşletme ekle</button>
+      <button class="btn alt" onclick="go('garage')">🚗 Garajım</button>
       <button class="btn red" onclick="db.auth.signOut().then(()=>go('home',null,false))">Çıkış yap</button>`;
   }
 };
@@ -372,6 +604,29 @@ function diagnose(){
   $('dg').innerHTML = `<div class="card" style="margin-top:10px;color:var(--ink)"><b>${esc(r.t)}</b><div class="tip">⚠️ ${esc(r.tip)}</div>
     <button class="btn" onclick="go('list','${r.slug}')">${esc(c?.name||'Ustaları')} ustalarını gör</button>
     <p class="muted" style="margin-top:6px">Bu bir ön yönlendirmedir, kesin tespiti usta yapar.</p></div>`;
+}
+function daysLeft(d){
+  if (!d) return null;
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((new Date(d + 'T00:00:00') - t) / 86400000);
+}
+function dueBadge(d){
+  const n = daysLeft(d);
+  if (n === null) return '<span class="muted">Girilmedi</span>';
+  const date = new Date(d + 'T00:00:00').toLocaleDateString('tr-TR');
+  if (n < 0) return `<span class="badge bad">Süresi geçti · ${date}</span>`;
+  if (n <= 30) return `<span class="badge warn">${n} gün kaldı · ${date}</span>`;
+  return `<span class="muted">${date}</span>`;
+}
+async function loadReminders(){
+  if (!S.user || !$('rem')) return;
+  const { data } = await db.from('vehicles').select('brand,model,inspection_date,insurance_date');
+  const items = [];
+  (data || []).forEach(v => [['Muayene', v.inspection_date], ['Sigorta', v.insurance_date]].forEach(([k, d]) => {
+    const n = daysLeft(d);
+    if (n !== null && n <= 30) items.push(`${esc(v.brand)} ${esc(v.model)}: ${k} ${n < 0 ? 'süresi geçti' : n + ' gün kaldı'}`);
+  }));
+  if (items.length && $('rem')) $('rem').innerHTML = `<button class="card" style="display:block;width:100%;text-align:left;border-left:6px solid var(--amber)" onclick="go('garage')"><b>🔔 Hatırlatma</b>${items.map(i => `<div class="muted">${i}</div>`).join('')}</button>`;
 }
 function getLocation(){
   return new Promise(res => {
