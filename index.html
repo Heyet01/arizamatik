@@ -97,6 +97,9 @@ nav button.on{color:var(--ink)}
 @media (prefers-color-scheme:dark){.plan .price{color:var(--amber)}}
 .plan ul{padding-left:18px;margin:8px 0;font-size:14px}
 .plan li{margin-bottom:4px}
+.camp{background:rgba(242,169,0,.18);color:var(--ink);border-radius:8px;padding:4px 8px;font-size:13px;font-weight:600;margin-top:4px;display:inline-block}
+.feat{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:18px}
+.feat .card{flex:none;width:210px;margin:0}
 .ref{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;letter-spacing:1px}
 .legal p,.legal li{margin-bottom:8px;font-size:15px}
 .legal ul{padding-left:20px}
@@ -185,12 +188,13 @@ const SCREENS = {
       </div>
       <div class="stripe"></div>
       <div id="rem"></div>
+      <div id="feat"></div>
       ${S.mode==='arac'?`<button class="sos" onclick="go('tow')"><span style="font-size:30px">🚨</span><span><b>Yolda kaldım</b>En yakın çekici ve yol yardımı</span></button>`:''}
       <h2>Kategoriler</h2>
       <div class="grid">${cats.map(c=>`<button class="cat" onclick="go('list','${c.slug}')"><i>${c.icon||'🔧'}</i>${esc(c.name)}</button>`).join('') || '<p class="muted">Kategoriler yükleniyor…</p>'}</div>
       <div class="card"><b>Usta mısın?</b><p class="muted">İşletmeni ücretsiz ekle, yakınındaki müşteriler seni bulsun.</p><button class="btn" onclick="go('addBiz')">İşletmemi ekle</button></div>`;
     $('q').onkeydown = e => { if (e.key==='Enter') diagnose(); };
-    loadReminders();
+    loadReminders(); loadFeatured();
   },
 
   async list(slug){
@@ -218,6 +222,7 @@ const SCREENS = {
             <div class="av">${esc(p.business_name[0])}</div>
             <div style="flex:1;min-width:0"><div class="row"><b>${esc(p.business_name)}</b>${p.plan_rank>0?'<span class="badge warn">⭐ Öne çıkan</span>':''}${p.is_verified?'<span class="badge">✔ Onaylı</span>':''}</div>
             <div class="muted">${p.distance_km!=null ? p.distance_km.toFixed(1)+' km · ' : ''}${esc(p.district||'')} ${p.is_24_7?'· 7/24':''}</div>
+            ${p.campaign ? `<div class="camp">📣 ${esc(p.campaign)}</div>` : ''}
             <div class="row"><span class="star">★ ${Number(p.rating_avg).toFixed(1)} <span class="muted">(${p.rating_count})</span></span><b>${p.min_price!=null?tl(p.min_price)+"'den":''}</b></div></div>
           </button>`).join('')
           : `<div class="empty">${byCity ? esc(S.city) + ' için' : 'Bu bölgede'} henüz kayıtlı usta yok.<br>Tanıdığın bir usta varsa Arızamatik'i ona öner.</div>`}`;
@@ -238,9 +243,12 @@ const SCREENS = {
     header('Usta profili');
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
     const { data:p, error } = await db.from('providers')
-      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,plan_code,plan_ends_at,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(url,created_at)')
+      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,plan_code,plan_ends_at,campaign_text,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(url,created_at)')
       .eq('id', id).single();
     if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+    await loadPlans();
+    const plan = planOf(p);
+    db.rpc('track_view', { pid:id });
     const { data:revs } = await db.from('reviews').select('rating,comment,created_at').eq('provider_id', id).order('created_at',{ascending:false}).limit(10);
     const near = (S.lastList||[]).find(x => x.id === id);
     const maps = near ? `https://www.google.com/maps/dir/?api=1&destination=${near.latitude},${near.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.address||'')+' '+(p.district||'')+' '+p.city)}`;
@@ -248,13 +256,14 @@ const SCREENS = {
     const isOwner = S.user && p.owner_id === S.user.id;
     $('view').innerHTML = `
       <div class="row" style="justify-content:flex-start;gap:14px"><div class="av" style="width:64px;height:64px">${esc(p.business_name[0])}</div>
-      <div><h2 style="margin:0">${esc(p.business_name)}</h2><div class="muted">${esc(p.contact_name||'')} ${p.is_verified?'· ✔ Onaylı':''} ${new Date(p.plan_ends_at||0) > new Date() ? '· ⭐ Öne çıkan':''}</div>
+      <div><h2 style="margin:0">${esc(p.business_name)}</h2><div class="muted">${esc(p.contact_name||'')} ${p.is_verified?'· ✔ Onaylı':''} ${plan.rank>0 ? '· ⭐ Öne çıkan':''}</div>
       <div class="star">★ ${Number(p.rating_avg).toFixed(1)} <span class="muted">${p.rating_count} değerlendirme</span></div></div></div>
       <div class="acts">
         ${p.phone?`<a href="tel:${esc(p.phone)}">📞<br>Ara</a>`:'<button disabled>📞<br>Yok</button>'}
         <a href="${maps}" target="_blank" rel="noopener">🧭<br>Yol tarifi</a>
-        ${wa?`<a href="https://wa.me/${esc(wa.replace(/\D/g,'').replace(/^0/,'90'))}" target="_blank" rel="noopener">💬<br>WhatsApp</a>`:'<button disabled>💬<br>Yok</button>'}
+        ${wa && plan.has_whatsapp?`<a href="https://wa.me/${esc(wa.replace(/\D/g,'').replace(/^0/,'90'))}" target="_blank" rel="noopener">💬<br>WhatsApp</a>`:`<a href="tel:${esc(p.phone||'')}">📲<br>Ara</a>`}
       </div>
+      ${plan.has_campaign && p.campaign_text ? `<div class="camp" style="display:block">📣 ${esc(p.campaign_text)}</div>` : ''}
       ${p.provider_photos.length ? `<div class="gallery">${p.provider_photos.sort((a,b)=>a.created_at.localeCompare(b.created_at)).map(f=>`<img src="${esc(f.url)}" alt="İşletme fotoğrafı" loading="lazy">`).join('')}</div>` : ''}
       ${p.description?`<p>${esc(p.description)}</p>`:''}
       <h2>Fiyat listesi</h2>
@@ -523,9 +532,11 @@ const SCREENS = {
     if (!S.user) return go('login');
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
     const { data:p, error } = await db.from('providers')
-      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,plan_code,plan_ends_at,services(id,name,price_min,price_max,category_id),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(id,url,path,created_at)')
+      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,plan_code,plan_ends_at,campaign_text,services(id,name,price_min,price_max,category_id),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(id,url,path,created_at)')
       .eq('id', id).single();
     if (error || p.owner_id !== S.user.id) { $('view').innerHTML = `<div class="empty">Bu işletmeyi düzenleme yetkin yok.</div>`; return; }
+    await loadPlans();
+    const plan = planOf(p);
     const sel = new Set(p.provider_categories.map(x => x.category_id));
     const hours = Object.fromEntries(p.working_hours.map(x => [x.day_of_week, x]));
     const order = [1,2,3,4,5,6,0];
@@ -533,7 +544,7 @@ const SCREENS = {
     $('view').innerHTML = `
       <h2 style="margin-bottom:6px">${esc(p.business_name)}</h2>
       ${planBanner(p)}
-      <div class="tabs"><button class="on" data-t="info">Bilgiler</button><button data-t="price">Fiyatlar</button><button data-t="hours">Saatler</button><button data-t="photos">Fotoğraflar</button></div>
+      <div class="tabs"><button class="on" data-t="info">Bilgiler</button><button data-t="price">Fiyatlar</button><button data-t="hours">Saatler</button><button data-t="photos">Fotoğraflar</button>${plan.has_stats?'<button data-t="stats">Rapor</button>':''}</div>
       <div data-p="info">
         <label>İşletme adı *</label><input class="in" id="e_name" value="${esc(p.business_name)}">
         <label>Yetkili adı</label><input class="in" id="e_contact" value="${esc(p.contact_name)}">
@@ -543,7 +554,8 @@ const SCREENS = {
         <label>İlçe</label><input class="in" id="e_district" value="${esc(p.district)}">
         <label>Açık adres</label><input class="in" id="e_addr" value="${esc(p.address)}">
         <label>İşletme tanıtımı</label><textarea class="in" id="e_desc" rows="3" placeholder="Kaç yıllık tecrübe, hangi markalar, garanti veriyor musun…">${esc(p.description)}</textarea>
-        <label>Hizmet alanları</label><div class="checks" id="e_cats">${S.cats.map(c => `<button class="chk ${sel.has(c.id)?'on':''}" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
+        ${plan.has_campaign ? `<label>📣 Kampanya şeridi (listede adının altında görünür)</label><input class="in" id="e_camp" maxlength="80" value="${esc(p.campaign_text)}" placeholder="Örn: Bu ay yağ ve filtre değişimi 1.200 ₺">` : `<div class="tip">📣 Kampanya şeridi Aylık Pro ve Yıllık Kurumsal paketlerde. <button class="linkbtn" onclick="go('plans','${p.id}')">Paketleri gör</button></div>`}
+        <label>Hizmet alanları (paketinle en fazla ${plan.category_limit})</label><div class="checks" id="e_cats">${S.cats.map(c => `<button class="chk ${sel.has(c.id)?'on':''}" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
         <label>Seçenekler</label><div class="checks"><button class="chk ${p.is_24_7?'on':''}" id="e_247">7/24 hizmet</button><button class="chk ${p.offers_mobile?'on':''}" id="e_mob">Yerinde servis</button></div>
         <button class="btn alt" id="e_loc">📍 Konumu şu anki yerimle güncelle</button>
         <button class="btn" id="e_save">Bilgileri kaydet</button>
@@ -561,6 +573,7 @@ const SCREENS = {
           <div class="row" style="margin-top:6px"><input class="in" type="time" id="h_o${d}" value="${esc((x.opens_at||'08:30').slice(0,5))}"><input class="in" type="time" id="h_c${d}" value="${esc((x.closes_at||'19:00').slice(0,5))}"></div></div>`; }).join('')}
         <button class="btn" id="h_save">Saatleri kaydet</button>
       </div>
+      ${plan.has_stats ? `<div data-p="stats" style="display:none"><div id="e_stats" class="muted">Rapor yükleniyor…</div></div>` : ''}
       <div data-p="photos" style="display:none">
         <p class="muted">İş yerinin dışı, içi ve yaptığın işlerden fotoğraf ekle (paketine göre en fazla <b id="e_limit">${photoLimit(p)}</b> adet). Fotoğraflı ustalar daha çok güven veriyor.</p>
         <div class="thumbs" id="e_photos" style="margin:10px 0"></div>
@@ -575,7 +588,26 @@ const SCREENS = {
     });
 
     // Bilgiler
-    $('e_cats').onclick = e => { const b = e.target.closest('[data-id]'); if (!b) return; const cid = +b.dataset.id; sel.has(cid) ? sel.delete(cid) : sel.add(cid); b.classList.toggle('on'); };
+    $('e_cats').onclick = e => {
+      const b = e.target.closest('[data-id]'); if (!b) return;
+      const cid = +b.dataset.id;
+      if (!sel.has(cid) && sel.size >= plan.category_limit) return toast(`Paketinle en fazla ${plan.category_limit} kategori seçebilirsin. Daha fazlası için paket yükselt.`);
+      sel.has(cid) ? sel.delete(cid) : sel.add(cid); b.classList.toggle('on');
+    };
+    if (plan.has_stats) {
+      db.rpc('provider_stats', { pid:p.id }).then(({ data:st, error }) => {
+        if (!$('e_stats')) return;
+        if (error) { $('e_stats').textContent = error.message; return; }
+        $('e_stats').innerHTML = `<div class="stat">
+          <div><b>${st.views_30d}</b><span class="muted">30 günde profil görüntülenme</span></div>
+          <div><b>${st.requests_30d}</b><span class="muted">30 günde gelen talep</span></div>
+          <div><b>${st.views_7d}</b><span class="muted">Son 7 gün görüntülenme</span></div>
+          <div><b>${st.requests_7d}</b><span class="muted">Son 7 gün talep</span></div>
+          <div><b>${st.completed}</b><span class="muted">Tamamlanan iş</span></div>
+          <div><b>★ ${Number(st.rating).toFixed(1)}</b><span class="muted">${st.reviews} değerlendirme</span></div>
+        </div><p class="muted">Profilin çok görüntülenip talep az geliyorsa fotoğraf ve fiyat listeni güçlendirmeyi dene.</p>`;
+      });
+    }
     ['e_247','e_mob'].forEach(x => $(x).onclick = e => e.currentTarget.classList.toggle('on'));
     let newLoc = null;
     $('e_loc').onclick = async () => { await getLocation(); if (!S.locOk) return toast('Konum izni gerekli'); newLoc = point(); $('e_loc').textContent = '📍 Yeni konum alındı, kaydetmeyi unutma'; };
@@ -583,7 +615,9 @@ const SCREENS = {
       const v = x => $(x).value.trim();
       if (!v('e_name') || !v('e_phone') || !v('e_city')) return toast('İşletme adı, telefon ve şehir zorunlu');
       if (!sel.size) return toast('En az bir hizmet alanı seç');
+      if (sel.size > plan.category_limit) return toast(`Paketinle en fazla ${plan.category_limit} kategori seçebilirsin`);
       const upd = { business_name:v('e_name'), contact_name:v('e_contact')||null, phone:v('e_phone'), whatsapp:v('e_wa')||null, city:v('e_city'), district:v('e_district')||null, address:v('e_addr')||null, description:v('e_desc')||null, is_24_7:$('e_247').classList.contains('on'), offers_mobile:$('e_mob').classList.contains('on') };
+      if ($('e_camp')) upd.campaign_text = $('e_camp').value.trim() || null;
       if (newLoc) upd.location = newLoc;
       const { error } = await db.from('providers').update(upd).eq('id', p.id);
       if (error) return toast('Kaydedilemedi: ' + error.message);
@@ -614,6 +648,7 @@ const SCREENS = {
       const name = $('n_name').value.trim(), min = $('n_min').value, max = $('n_max').value, cat = $('n_cat').value;
       if (!name || !min) return toast('İş adı ve en az fiyatı yaz');
       if (!cat) return toast('Önce Bilgiler sekmesinde hizmet alanı seçip kaydet');
+      if (plan.price_limit && prices.length >= plan.price_limit) return toast(`Ücretsiz üyelikte en fazla ${plan.price_limit} fiyat satırı olur. Sınırsız fiyat için paket al.`);
       if (max && Number(max) < Number(min)) return toast('En çok fiyat, en az fiyattan küçük olamaz');
       const { data:s, error } = await db.from('services').insert({ provider_id:p.id, category_id:Number(cat), name, price_min:Number(min), price_max:max ? Number(max) : null }).select('id,name,price_min,price_max,category_id').single();
       if (error) return toast('Eklenemedi: ' + error.message);
@@ -673,7 +708,7 @@ const SCREENS = {
       <label>Şehir *</label><input class="in" id="b_city" placeholder="Örn: Konya">
       <label>İlçe</label><input class="in" id="b_district">
       <label>Açık adres</label><input class="in" id="b_addr">
-      <label>Hizmet verdiğin alanlar *</label><div class="checks" id="b_cats">${S.cats.map(c=>`<button class="chk" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
+      <label>Hizmet verdiğin alanlar * (ücretsiz üyelikte en fazla 2)</label><div class="checks" id="b_cats">${S.cats.map(c=>`<button class="chk" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
       <label>Seçenekler</label><div class="checks"><button class="chk" id="b_247">7/24 hizmet</button><button class="chk" id="b_mob">Yerinde servis</button></div>
       <label>Fiyat listesi (en az bir iş)</label>
       ${[1,2,3].map(i=>`<div class="row" style="margin-bottom:6px"><input class="in" id="s_n${i}" placeholder="Örn: Lastik tamiri"><input class="in" id="s_p${i}" type="number" inputmode="numeric" placeholder="₺" style="max-width:100px"></div>`).join('')}
@@ -684,6 +719,7 @@ const SCREENS = {
     $('b_save').onclick = async () => {
       const v = id => $(id).value.trim();
       if (!v('b_name') || !v('b_phone') || !v('b_city') || !sel.size) return toast('Yıldızlı alanları doldur ve en az bir alan seç');
+      if (sel.size > 2) return toast('Ücretsiz üyelikte 2 hizmet alanı seçebilirsin. Daha fazlası için paket alabilirsin.');
       await getLocation();
       if (!S.locOk) return toast('Konum izni gerekli. Tarayıcı ayarlarından konuma izin ver.');
       $('b_save').disabled = true; $('b_save').textContent = 'Kaydediliyor…';
@@ -707,7 +743,7 @@ const SCREENS = {
     if (!S.user) return go('login');
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
     const [{ data:plans, error:pe }, { data:biz }] = await Promise.all([
-      db.from('plans').select('*').eq('is_active', true).order('sort_order'),
+      db.from('plans').select('*').order('sort_order'),
       db.from('providers').select('id,business_name,plan_code,plan_ends_at').eq('owner_id', S.user.id)
     ]);
     if (pe) { $('view').innerHTML = `<div class="empty">${esc(pe.message)}</div>`; return; }
@@ -720,7 +756,8 @@ const SCREENS = {
       <div class="card"><b>${esc(target.business_name)}</b>${planBanner(target)}</div>
       ${biz.length > 1 ? `<label>İşletme seç</label><select class="in" id="p_biz">${biz.map(b => `<option value="${b.id}" ${b.id===target.id?'selected':''}>${esc(b.business_name)}</option>`).join('')}</select>` : ''}
       <p class="muted" style="margin:12px 0">Kullanıcılar Arızamatik'i her zaman ücretsiz kullanır. Paketler, seni arızası olan müşterilerin karşısına daha üst sırada çıkarmak içindir.</p>
-      ${plans.map(pl => `<div class="plan ${pl.code==='monthly'?'best':''}">
+      ${(plans.find(x => x.code === 'free') ? [plans.find(x => x.code === 'free')] : []).map(f => `<div class="plan"><h3>${esc(f.name)}</h3><div class="price">0 ₺</div><ul>${f.features.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="muted">${planOf(target).code==='free'?'Şu an bu üyeliktesin':''}</div></div>`).join('')}
+      ${plans.filter(pl => pl.is_active && pl.price > 0).map(pl => `<div class="plan ${pl.code==='monthly'?'best':''}">
         ${pl.code==='monthly'?'<span class="badge warn">En çok tercih edilen</span>':''}
         <h3>${esc(pl.name)}</h3>
         <div class="price">${tl(pl.price)} <span class="muted" style="font-size:15px">/ ${pl.duration_days} gün</span></div>
@@ -984,18 +1021,24 @@ function diagnose(){
     <button class="btn" onclick="go('list','${r.slug}')">${esc(c?.name||'Ustaları')} ustalarını gör</button>
     <p class="muted" style="margin-top:6px">Bu bir ön yönlendirmedir, kesin tespiti usta yapar.</p></div>`;
 }
-function photoLimit(p){
-  if (p.plan_ends_at && new Date(p.plan_ends_at) > new Date()) {
-    return { weekly:8, monthly:15, yearly:30 }[p.plan_code] || 8;
-  }
-  return 4;
+const FREE_PLAN = { code:'free', name:'Ücretsiz üyelik', rank:0, photo_limit:4, category_limit:2, price_limit:5, has_campaign:false, has_stats:false, has_whatsapp:false, featured_home:false };
+function planOf(p){
+  const active = p && p.plan_code && p.plan_ends_at && new Date(p.plan_ends_at) > new Date();
+  if (!active) return FREE_PLAN;
+  return (S.plans || []).find(x => x.code === p.plan_code) || FREE_PLAN;
 }
+async function loadPlans(){
+  if (S.plans) return S.plans;
+  const { data } = await db.from('plans').select('*').order('sort_order');
+  S.plans = data || [];
+  return S.plans;
+}
+function photoLimit(p){ return planOf(p).photo_limit || 4; }
 function planBanner(p){
-  const active = p.plan_ends_at && new Date(p.plan_ends_at) > new Date();
-  if (!active) return `<div class="tip">Şu an ücretsiz üyesin. İlan paketi alarak arızası olan müşterilerin karşısına üst sırada çıkabilirsin. <button class="linkbtn" onclick="go('plans','${p.id}')">Paketleri gör</button></div>`;
-  const name = { weekly:'Haftalık Vitrin', monthly:'Aylık Pro', yearly:'Yıllık Kurumsal' }[p.plan_code] || 'Paket';
+  const pl = planOf(p);
+  if (pl.code === 'free') return `<div class="tip">Şu an ücretsiz üyesin: 4 fotoğraf, 5 fiyat satırı, 2 kategori ve listede paketlilerin altında sıra. <button class="linkbtn" onclick="go('plans','${p.id}')">Paketleri gör</button></div>`;
   const left = Math.max(0, Math.ceil((new Date(p.plan_ends_at) - new Date()) / 86400000));
-  return `<div class="tip">⭐ <b>${name}</b> aktif · ${left} gün kaldı <button class="linkbtn" onclick="go('plans','${p.id}')">Paketler</button></div>`;
+  return `<div class="tip">⭐ <b>${esc(pl.name)}</b> aktif · ${left} gün kaldı <button class="linkbtn" onclick="go('plans','${p.id}')">Paketler</button></div>`;
 }
 const HOME_KINDS = {
   kombi:{name:'Kombi / doğalgaz', icon:'🔥', slug:'kombi'},
@@ -1038,6 +1081,17 @@ function dueBadge(d){
   if (n < 0) return `<span class="badge bad">Süresi geçti · ${date}</span>`;
   if (n <= 30) return `<span class="badge warn">${n} gün kaldı · ${date}</span>`;
   return `<span class="muted">${date}</span>`;
+}
+async function loadFeatured(){
+  if (!$('feat')) return;
+  await getLocation();
+  if (!S.locOk || !$('feat')) return;
+  const { data } = await db.rpc('featured_providers', { lat:S.lat, lng:S.lng });
+  if (!data || !data.length || !$('feat')) return;
+  $('feat').innerHTML = `<h2>⭐ Öne çıkanlar</h2><div class="feat">${data.map(f => `<button class="card" onclick="go('pro','${f.id}')" style="text-align:left">
+    <b>${esc(f.business_name)}</b>
+    <div class="muted">${f.distance_km.toFixed(1)} km · ★ ${Number(f.rating_avg).toFixed(1)} (${f.rating_count})</div>
+    ${f.campaign ? `<div class="camp">${esc(f.campaign)}</div>` : ''}</button>`).join('')}</div>`;
 }
 async function loadReminders(){
   if (!S.user || !$('rem')) return;
