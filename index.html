@@ -183,7 +183,10 @@ const SCREENS = {
       <div class="hero">
         <h1>Ne arızalandı?</h1>
         <div class="seg"><button class="${S.mode==='arac'?'on':''}" onclick="S.mode='arac';go('home',null,false)">🚗 Aracım</button><button class="${S.mode==='ev'?'on':''}" onclick="S.mode='ev';go('home',null,false)">🏠 Evim</button></div>
-        <div class="ask"><input id="q" placeholder="${S.mode==='arac'?'Örn: araç hararet yaptı':'Örn: evde su gelmiyor'}"><button onclick="diagnose()">Sor</button></div>
+        <div class="ask"><input id="q" placeholder="${S.mode==='arac'?'Örn: araç hararet yaptı, sabah marş basmadı':'Örn: evde su gelmiyor, kombi yanmıyor'}"><button onclick="diagnose()">Sor</button></div>
+        ${S.aiOff ? '' : `<label for="qphoto" class="linkbtn" style="color:#cfdbe5;cursor:pointer">📷 Fotoğraf ekle (isteğe bağlı)</label>`}
+        <input id="qphoto" type="file" accept="image/*" style="display:none">
+        <span id="qphotoName" class="hint"></span>
         <div id="dg"></div>
       </div>
       <div class="stripe"></div>
@@ -194,6 +197,7 @@ const SCREENS = {
       <div class="grid">${cats.map(c=>`<button class="cat" onclick="go('list','${c.slug}')"><i>${c.icon||'🔧'}</i>${esc(c.name)}</button>`).join('') || '<p class="muted">Kategoriler yükleniyor…</p>'}</div>
       <div class="card"><b>Usta mısın?</b><p class="muted">İşletmeni ücretsiz ekle, yakınındaki müşteriler seni bulsun.</p><button class="btn" onclick="go('addBiz')">İşletmemi ekle</button></div>`;
     $('q').onkeydown = e => { if (e.key==='Enter') diagnose(); };
+    if ($('qphoto')) $('qphoto').onchange = e => { $('qphotoName').textContent = e.target.files[0] ? '📎 ' + e.target.files[0].name : ''; };
     loadReminders(); loadFeatured();
   },
 
@@ -1025,15 +1029,51 @@ const SCREENS = {
 };
 
 /* ---------- Yardimcilar ---------- */
-function diagnose(){
-  const text = $('q').value.toLocaleLowerCase('tr-TR').trim();
-  if (!text) return $('q').focus();
-  const r = RULES.find(x => x.k.some(k => text.includes(k)));
-  if (!r) { $('dg').innerHTML = `<div class="tip" style="color:var(--ink)">Biraz daha detay yaz (hangi parça/cihaz, ses, koku, ışık) ya da aşağıdan kategori seç.</div>`; return; }
+function keywordDiagnose(text){
+  const low = text.toLocaleLowerCase('tr-TR');
+  const r = RULES.find(x => x.k.some(k => low.includes(k)));
+  if (!r) { $('dg').innerHTML = `<div class="tip" style="color:var(--ink)">Biraz daha detay yaz (hangi parça veya cihaz, ses, koku, ışık) ya da aşağıdan kategori seç.</div>`; return; }
   const c = catBySlug(r.slug);
   $('dg').innerHTML = `<div class="card" style="margin-top:10px;color:var(--ink)"><b>${esc(r.t)}</b><div class="tip">⚠️ ${esc(r.tip)}</div>
-    <button class="btn" onclick="go('list','${r.slug}')">${esc(c?.name||'Ustaları')} ustalarını gör</button>
+    <button class="btn" onclick="go('list','${r.slug}')">${esc(c?.name || 'İlgili')} ustalarını gör</button>
     <p class="muted" style="margin-top:6px">Bu bir ön yönlendirmedir, kesin tespiti usta yapar.</p></div>`;
+}
+
+async function diagnose(){
+  const text = $('q').value.trim();
+  const file = S.aiOff ? null : $('qphoto')?.files?.[0];
+  if (!text && !file) return $('q').focus();
+  if (!S.user || S.aiOff) { keywordDiagnose(text); return; }
+
+  $('dg').innerHTML = `<div class="card" style="margin-top:10px;color:var(--ink)"><b>🤖 Arıza inceleniyor…</b><div class="muted">Birkaç saniye sürebilir.</div></div>`;
+  let photo_url = null;
+  if (file) {
+    try { photo_url = (await uploadPhoto(file)).url; }
+    catch (e) { toast('Fotoğraf yüklenemedi, yazıyla devam ediyorum'); }
+  }
+  try {
+    const { data, error } = await db.functions.invoke('diagnose', { body:{ text, mode:S.mode, photo_url } });
+    if (error || !data || data.error) {
+      if (data?.error === 'no_key') S.aiOff = true;
+      else if (data?.message) toast(data.message);
+      keywordDiagnose(text);
+      return;
+    }
+    const c = catBySlug(data.category_slug);
+    const lvl = { high:['Acil','high'], mid:['Orta öncelik','mid'], low:['Acil değil','low'] }[data.urgency] || ['Orta öncelik','mid'];
+    $('dg').innerHTML = `<div class="card" style="margin-top:10px;color:var(--ink)">
+      <b>${esc(data.title || 'Ön teşhis')}</b>
+      <div><span class="badge ${lvl[1]==='high'?'bad':'warn'}">${lvl[0]}</span></div>
+      ${Array.isArray(data.causes) && data.causes.length ? `<div class="muted" style="margin-top:6px">Olası nedenler</div><ul style="padding-left:18px;font-size:14px">${data.causes.slice(0,4).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${data.safety ? `<div class="tip">⚠️ ${esc(data.safety)}</div>` : ''}
+      ${Array.isArray(data.questions) && data.questions.length ? `<details style="margin-top:8px"><summary class="muted">Ustaya sorabileceğin sorular</summary><ul style="padding-left:18px;font-size:14px">${data.questions.slice(0,3).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
+      ${c ? `<button class="btn" onclick="go('list','${c.slug}')">${esc(c.name)} ustalarını gör</button>` : ''}
+      ${S.mode === 'arac' ? `<button class="btn alt" onclick="go('tow')">🚛 Çekici çağır</button>` : ''}
+      <p class="muted" style="margin-top:6px">Bu bir ön teşhistir, kesin tespiti usta yapar.</p></div>`;
+    if ($('qphoto')) { $('qphoto').value = ''; $('qphotoName').textContent = ''; }
+  } catch (e) {
+    keywordDiagnose(text);
+  }
 }
 const FREE_PLAN = { code:'free', name:'Ücretsiz üyelik', rank:0, photo_limit:12, category_limit:99, price_limit:0, visible_radius_km:15, has_campaign:false, has_stats:false, has_whatsapp:false, has_discount:false, has_response_badge:false, has_warranty:false, featured_home:false };
 function badges(p){
