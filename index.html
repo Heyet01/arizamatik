@@ -222,7 +222,7 @@ const SCREENS = {
             <div class="av">${esc(p.business_name[0])}</div>
             <div style="flex:1;min-width:0"><div class="row"><b>${esc(p.business_name)}</b>${p.plan_rank>0?'<span class="badge warn">⭐ Öne çıkan</span>':''}${p.is_verified?'<span class="badge">✔ Onaylı</span>':''}</div>
             <div class="muted">${p.distance_km!=null ? p.distance_km.toFixed(1)+' km · ' : ''}${esc(p.district||'')} ${p.is_24_7?'· 7/24':''}</div>
-            ${p.campaign ? `<div class="camp">📣 ${esc(p.campaign)}</div>` : ''}
+            ${badges(p)}
             <div class="row"><span class="star">★ ${Number(p.rating_avg).toFixed(1)} <span class="muted">(${p.rating_count})</span></span><b>${p.min_price!=null?tl(p.min_price)+"'den":''}</b></div></div>
           </button>`).join('')
           : `<div class="empty">${byCity ? esc(S.city) + ' için' : 'Bu bölgede'} henüz kayıtlı usta yok.<br>Tanıdığın bir usta varsa Arızamatik'i ona öner.</div>`}`;
@@ -243,27 +243,37 @@ const SCREENS = {
     header('Usta profili');
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
     const { data:p, error } = await db.from('providers')
-      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,plan_code,plan_ends_at,campaign_text,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(url,created_at)')
+      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,is_verified,plan_code,plan_ends_at,discount_text,warranty_months,response_commit_min,avg_response_min,rating_avg,rating_count,services(name,price_min,price_max,unit),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(url,created_at)')
       .eq('id', id).single();
     if (error) { $('view').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
     await loadPlans();
     const plan = planOf(p);
     db.rpc('track_view', { pid:id });
     const { data:revs } = await db.from('reviews').select('rating,comment,created_at').eq('provider_id', id).order('created_at',{ascending:false}).limit(10);
-    const near = (S.lastList||[]).find(x => x.id === id);
-    const maps = near ? `https://www.google.com/maps/dir/?api=1&destination=${near.latitude},${near.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.address||'')+' '+(p.district||'')+' '+p.city)}`;
+    let coords = (S.lastList||[]).find(x => x.id === id);
+    if (!coords || coords.latitude == null) {
+      const { data:c } = await db.rpc('provider_coords', { pid:id });
+      if (c && c.length) coords = c[0];
+    }
+    const maps = (coords && coords.latitude != null)
+      ? `https://www.google.com/maps/dir/?api=1&destination=${coords.latitude},${coords.longitude}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.address, p.district, p.city].filter(Boolean).join(' '))}`;
     const wa = p.whatsapp || p.phone;
     const isOwner = S.user && p.owner_id === S.user.id;
     $('view').innerHTML = `
       <div class="row" style="justify-content:flex-start;gap:14px"><div class="av" style="width:64px;height:64px">${esc(p.business_name[0])}</div>
       <div><h2 style="margin:0">${esc(p.business_name)}</h2><div class="muted">${esc(p.contact_name||'')} ${p.is_verified?'· ✔ Onaylı':''} ${plan.rank>0 ? '· ⭐ Öne çıkan':''}</div>
       <div class="star">★ ${Number(p.rating_avg).toFixed(1)} <span class="muted">${p.rating_count} değerlendirme</span></div></div></div>
-      <div class="acts">
-        ${p.phone?`<a href="tel:${esc(p.phone)}">📞<br>Ara</a>`:'<button disabled>📞<br>Yok</button>'}
+      <div class="acts" style="grid-template-columns:repeat(${wa && plan.has_whatsapp ? 3 : 2},1fr)">
+        ${p.phone?`<a href="tel:${esc(p.phone)}">📞<br>Ara</a>`:'<button disabled>📞<br>Telefon yok</button>'}
         <a href="${maps}" target="_blank" rel="noopener">🧭<br>Yol tarifi</a>
-        ${wa && plan.has_whatsapp?`<a href="https://wa.me/${esc(wa.replace(/\D/g,'').replace(/^0/,'90'))}" target="_blank" rel="noopener">💬<br>WhatsApp</a>`:`<a href="tel:${esc(p.phone||'')}">📲<br>Ara</a>`}
+        ${wa && plan.has_whatsapp?`<a href="https://wa.me/${esc(wa.replace(/\D/g,'').replace(/^0/,'90'))}" target="_blank" rel="noopener">💬<br>WhatsApp</a>`:''}
       </div>
-      ${plan.has_campaign && p.campaign_text ? `<div class="camp" style="display:block">📣 ${esc(p.campaign_text)}</div>` : ''}
+      ${plan.has_discount && p.discount_text ? `<div class="camp" style="display:block">🎟️ ${esc(p.discount_text)}</div>` : ''}
+      ${(plan.has_warranty && p.warranty_months) || (plan.has_response_badge && p.response_commit_min) ? `<div class="muted" style="margin:6px 0">
+        ${plan.has_warranty && p.warranty_months ? `🛡️ ${p.warranty_months} ay işçilik garantisi` : ''}
+        ${plan.has_response_badge && p.response_commit_min ? ` ⚡ ${p.response_commit_min} dk içinde yanıt taahhüdü${p.avg_response_min ? ` (son işlerde ortalama ${Math.round(p.avg_response_min)} dk)` : ''}` : ''}
+      </div>` : ''}
       ${p.provider_photos.length ? `<div class="gallery">${p.provider_photos.sort((a,b)=>a.created_at.localeCompare(b.created_at)).map(f=>`<img src="${esc(f.url)}" alt="İşletme fotoğrafı" loading="lazy">`).join('')}</div>` : ''}
       ${p.description?`<p>${esc(p.description)}</p>`:''}
       <h2>Fiyat listesi</h2>
@@ -532,7 +542,7 @@ const SCREENS = {
     if (!S.user) return go('login');
     $('view').innerHTML = `<p class="muted">Yükleniyor…</p>`;
     const { data:p, error } = await db.from('providers')
-      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,plan_code,plan_ends_at,campaign_text,services(id,name,price_min,price_max,category_id),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(id,url,path,created_at)')
+      .select('id,owner_id,business_name,contact_name,description,phone,whatsapp,address,city,district,is_24_7,offers_mobile,plan_code,plan_ends_at,discount_text,warranty_months,response_commit_min,services(id,name,price_min,price_max,category_id),working_hours(day_of_week,opens_at,closes_at,is_closed),provider_categories(category_id),provider_photos(id,url,path,created_at)')
       .eq('id', id).single();
     if (error || p.owner_id !== S.user.id) { $('view').innerHTML = `<div class="empty">Bu işletmeyi düzenleme yetkin yok.</div>`; return; }
     await loadPlans();
@@ -554,7 +564,9 @@ const SCREENS = {
         <label>İlçe</label><input class="in" id="e_district" value="${esc(p.district)}">
         <label>Açık adres</label><input class="in" id="e_addr" value="${esc(p.address)}">
         <label>İşletme tanıtımı</label><textarea class="in" id="e_desc" rows="3" placeholder="Kaç yıllık tecrübe, hangi markalar, garanti veriyor musun…">${esc(p.description)}</textarea>
-        ${plan.has_campaign ? `<label>📣 Kampanya şeridi (listede adının altında görünür)</label><input class="in" id="e_camp" maxlength="80" value="${esc(p.campaign_text)}" placeholder="Örn: Bu ay yağ ve filtre değişimi 1.200 ₺">` : `<div class="tip">📣 Kampanya şeridi Aylık Pro ve Yıllık Kurumsal paketlerde. <button class="linkbtn" onclick="go('plans','${p.id}')">Paketleri gör</button></div>`}
+        ${plan.has_discount ? `<label>🎟️ Arızamatik indirimi (listede öne çıkar)</label><input class="in" id="e_disc" maxlength="80" value="${esc(p.discount_text)}" placeholder="Örn: Arızamatik'ten geldim diyene %10 indirim">` : `<div class="tip">🎟️ Arızamatik indirimi paketli işletmelerde. Müşteriyi en çok çeken özellik. <button class="linkbtn" onclick="go('plans','${p.id}')">Paketleri gör</button></div>`}
+        ${plan.has_response_badge ? `<label>⚡ Yanıt taahhüdün</label><select class="in" id="e_resp"><option value="">Taahhüt verme</option>${[15,30,60,120].map(m => `<option value="${m}" ${p.response_commit_min===m?'selected':''}>${m} dakika içinde yanıtlarım</option>`).join('')}</select><div class="muted">Gerçek ortalaman da yanında gösterilir, tutamayacağın süreyi seçme.</div>` : ''}
+        ${plan.has_warranty ? `<label>🛡️ İşçilik garantisi</label><select class="in" id="e_war"><option value="">Garanti verme</option>${[1,3,6,12].map(m => `<option value="${m}" ${p.warranty_months===m?'selected':''}>${m} ay garanti</option>`).join('')}</select>` : ''}
         <label>Hizmet alanları (paketinle en fazla ${plan.category_limit})</label><div class="checks" id="e_cats">${S.cats.map(c => `<button class="chk ${sel.has(c.id)?'on':''}" data-id="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('')}</div>
         <label>Seçenekler</label><div class="checks"><button class="chk ${p.is_24_7?'on':''}" id="e_247">7/24 hizmet</button><button class="chk ${p.offers_mobile?'on':''}" id="e_mob">Yerinde servis</button></div>
         <button class="btn alt" id="e_loc">📍 Konumu şu anki yerimle güncelle</button>
@@ -617,7 +629,9 @@ const SCREENS = {
       if (!sel.size) return toast('En az bir hizmet alanı seç');
       if (sel.size > plan.category_limit) return toast(`Paketinle en fazla ${plan.category_limit} kategori seçebilirsin`);
       const upd = { business_name:v('e_name'), contact_name:v('e_contact')||null, phone:v('e_phone'), whatsapp:v('e_wa')||null, city:v('e_city'), district:v('e_district')||null, address:v('e_addr')||null, description:v('e_desc')||null, is_24_7:$('e_247').classList.contains('on'), offers_mobile:$('e_mob').classList.contains('on') };
-      if ($('e_camp')) upd.campaign_text = $('e_camp').value.trim() || null;
+      if ($('e_disc')) upd.discount_text = $('e_disc').value.trim() || null;
+      if ($('e_resp')) upd.response_commit_min = $('e_resp').value ? Number($('e_resp').value) : null;
+      if ($('e_war')) upd.warranty_months = $('e_war').value ? Number($('e_war').value) : null;
       if (newLoc) upd.location = newLoc;
       const { error } = await db.from('providers').update(upd).eq('id', p.id);
       if (error) return toast('Kaydedilemedi: ' + error.message);
@@ -1021,7 +1035,16 @@ function diagnose(){
     <button class="btn" onclick="go('list','${r.slug}')">${esc(c?.name||'Ustaları')} ustalarını gör</button>
     <p class="muted" style="margin-top:6px">Bu bir ön yönlendirmedir, kesin tespiti usta yapar.</p></div>`;
 }
-const FREE_PLAN = { code:'free', name:'Ücretsiz üyelik', rank:0, photo_limit:4, category_limit:2, price_limit:5, has_campaign:false, has_stats:false, has_whatsapp:false, featured_home:false };
+const FREE_PLAN = { code:'free', name:'Ücretsiz üyelik', rank:0, photo_limit:12, category_limit:99, price_limit:0, visible_radius_km:15, has_campaign:false, has_stats:false, has_whatsapp:false, has_discount:false, has_response_badge:false, has_warranty:false, featured_home:false };
+function badges(p){
+  let out = '';
+  if (p.discount) out += `<div class="camp">🎟️ ${esc(p.discount)}</div>`;
+  const chips = [];
+  if (p.warranty_months) chips.push(`🛡️ ${p.warranty_months} ay işçilik garantisi`);
+  if (p.response_min) chips.push(`⚡ ${p.response_min} dk içinde yanıt${p.avg_response_min ? ` (ort. ${Math.round(p.avg_response_min)} dk)` : ''}`);
+  if (chips.length) out += `<div class="muted" style="margin-top:2px">${chips.map(esc).join(' · ')}</div>`;
+  return out;
+}
 function planOf(p){
   const active = p && p.plan_code && p.plan_ends_at && new Date(p.plan_ends_at) > new Date();
   if (!active) return FREE_PLAN;
@@ -1036,7 +1059,7 @@ async function loadPlans(){
 function photoLimit(p){ return planOf(p).photo_limit || 4; }
 function planBanner(p){
   const pl = planOf(p);
-  if (pl.code === 'free') return `<div class="tip">Şu an ücretsiz üyesin: 4 fotoğraf, 5 fiyat satırı, 2 kategori ve listede paketlilerin altında sıra. <button class="linkbtn" onclick="go('plans','${p.id}')">Paketleri gör</button></div>`;
+  if (pl.code === 'free') return `<div class="tip">Ücretsiz üyesin: sadece ${pl.visible_radius_km} km içindeki aramalarda ve paketlilerin altında listelenirsin. <button class="linkbtn" onclick="go('plans','${p.id}')">Öncelik paketleri</button></div>`;
   const left = Math.max(0, Math.ceil((new Date(p.plan_ends_at) - new Date()) / 86400000));
   return `<div class="tip">⭐ <b>${esc(pl.name)}</b> aktif · ${left} gün kaldı <button class="linkbtn" onclick="go('plans','${p.id}')">Paketler</button></div>`;
 }
@@ -1091,7 +1114,7 @@ async function loadFeatured(){
   $('feat').innerHTML = `<h2>⭐ Öne çıkanlar</h2><div class="feat">${data.map(f => `<button class="card" onclick="go('pro','${f.id}')" style="text-align:left">
     <b>${esc(f.business_name)}</b>
     <div class="muted">${f.distance_km.toFixed(1)} km · ★ ${Number(f.rating_avg).toFixed(1)} (${f.rating_count})</div>
-    ${f.campaign ? `<div class="camp">${esc(f.campaign)}</div>` : ''}</button>`).join('')}</div>`;
+    ${f.campaign ? `<div class="camp">🎟️ ${esc(f.campaign)}</div>` : ''}</button>`).join('')}</div>`;
 }
 async function loadReminders(){
   if (!S.user || !$('rem')) return;
