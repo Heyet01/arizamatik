@@ -195,7 +195,10 @@ const SCREENS = {
       ${S.mode==='arac'?`<button class="sos" onclick="go('tow')"><span style="font-size:30px">🚨</span><span><b>Yolda kaldım</b>En yakın çekici ve yol yardımı</span></button>`:''}
       <h2>Kategoriler</h2>
       <div class="grid">${cats.map(c=>`<button class="cat" onclick="go('list','${c.slug}')"><i>${c.icon||'🔧'}</i>${esc(c.name)}</button>`).join('') || '<p class="muted">Kategoriler yükleniyor…</p>'}</div>
-      <div class="card"><b>Usta mısın?</b><p class="muted">İşletmeni ücretsiz ekle, yakınındaki müşteriler seni bulsun.</p><button class="btn" onclick="go('addBiz')">İşletmemi ekle</button></div>`;
+      <div class="card"><b>Usta mısın?</b><p class="muted">${S.role === 'provider' || S.role === 'admin'
+        ? 'İşletmeni ücretsiz ekle, yakınındaki müşteriler seni bulsun.'
+        : 'İlan verebilmek için işletme hesabıyla kayıt olman gerekiyor.'}</p>
+        <button class="btn" onclick="go('${S.role === 'provider' || S.role === 'admin' ? 'addBiz' : 'login'}')">${S.role === 'provider' || S.role === 'admin' ? 'İşletmemi ekle' : 'İşletme hesabı aç'}</button></div>`;
     $('q').onkeydown = e => { if (e.key==='Enter') diagnose(); };
     if ($('qphoto')) $('qphoto').onchange = e => { $('qphotoName').textContent = e.target.files[0] ? '📎 ' + e.target.files[0].name : ''; };
     loadReminders(); loadFeatured();
@@ -718,6 +721,12 @@ const SCREENS = {
   addBiz(){
     header('İşletmemi ekle');
     if (!S.user) { $('view').innerHTML = `<div class="empty">İşletme eklemek için önce giriş yap veya kayıt ol.</div><button class="btn" onclick="go('login')">Giriş yap</button>`; return; }
+    if (S.role !== 'provider' && S.role !== 'admin') {
+      $('view').innerHTML = `<div class="card"><b>Bu hesap kullanıcı hesabı</b>
+        <p class="muted">Arızamatik'te ilan yalnızca işletme hesaplarıyla verilir. Usta, çekici, parçacı veya servis isen çıkış yapıp kayıt ekranında <b>🔧 İşletme / usta</b> seçeneğiyle yeni bir hesap açman yeterli.</p>
+        <button class="btn" onclick="db.auth.signOut().then(()=>{S.role='user';go('login',null,false)})">Çıkış yap ve işletme hesabı aç</button></div>`;
+      return;
+    }
     const sel = new Set();
     $('view').innerHTML = `
       <label>İşletme adı *</label><input class="in" id="b_name" placeholder="Örn: Kaya Oto Sanayi">
@@ -1016,11 +1025,13 @@ const SCREENS = {
     if (!S.user) { $('view').innerHTML = `<div class="empty">Giriş yaparak talep oluşturabilir, işletmeni ekleyebilirsin.</div><button class="btn" onclick="go('login')">Giriş yap / Kayıt ol</button>`; return; }
     const { data:mine } = await db.from('providers').select('id,business_name,plan_code,plan_ends_at').eq('owner_id', S.user.id);
     $('view').innerHTML = `
-      <h2>Hesabım</h2><div class="card"><div class="muted">E-posta</div><b>${esc(S.user.email)}</b></div>
+      <h2>Hesabım</h2><div class="card"><div class="muted">E-posta</div><b>${esc(S.user.email)}</b>
+        <div class="muted" style="margin-top:6px">Hesap türü: ${S.role === 'provider' ? '🔧 İşletme / usta' : S.role === 'admin' ? '🛡️ Yönetici' : '👤 Kullanıcı'}</div></div>
       <h2>İşletmelerim</h2>
+      ${!(mine||[]).length && S.role !== 'provider' && S.role !== 'admin' ? '<p class="muted">Bu hesapla ilan verilemez. İlan vermek için işletme hesabı açman gerekir.</p>' : ''}
       ${(mine||[]).map(b=>`<button class="card pro" onclick="go('bizEdit','${b.id}')"><div class="av">${esc(b.business_name[0])}</div><div style="align-self:center"><b>${esc(b.business_name)}</b><div class="muted">${new Date(b.plan_ends_at||0) > new Date() ? '⭐ ' + (b.plan_code==='yearly'?'Yıllık':b.plan_code==='monthly'?'Aylık':'Haftalık') + ' paket aktif' : '✏️ Usta panelini aç'}</div></div></button>`).join('') || '<p class="muted">Kayıtlı işletmen yok.</p>'}
       ${(mine||[]).length ? `<button class="btn" onclick="go('plans','${mine[0].id}')">⭐ İlan paketleri</button>` : ''}
-      <button class="btn alt" onclick="go('addBiz')">+ İşletme ekle</button>
+      ${S.role === 'provider' || S.role === 'admin' ? `<button class="btn alt" onclick="go('addBiz')">+ İşletme ekle</button>` : ''}
       <button class="btn alt" onclick="go('garage')">🔔 Garaj & Ev</button>
       ${S.role==='admin' ? `<button class="btn" onclick="go('admin')">🛡️ Yönetim paneli</button>` : ''}
       <div class="row" style="justify-content:center;gap:16px;margin-top:10px"><button class="linkbtn" onclick="go('legal','terms')">Kullanım koşulları</button><button class="linkbtn" onclick="go('legal','kvkk')">KVKK aydınlatma metni</button></div>
